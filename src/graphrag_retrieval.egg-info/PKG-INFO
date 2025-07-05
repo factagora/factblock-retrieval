@@ -1,0 +1,101 @@
+Metadata-Version: 2.4
+Name: graphrag-retrieval
+Version: 0.1.0
+Summary: A modular retrieval system for graph-based retrieval augmented generation
+Home-page: https://github.com/yourusername/graphrag-retrieval
+Author: Your Name
+Author-email: your.email@example.com
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: neo4j==5.14.0
+Requires-Dist: pydantic==2.5.0
+Requires-Dist: python-dotenv==1.0.0
+Provides-Extra: dev
+Requires-Dist: pytest==7.4.3; extra == "dev"
+Requires-Dist: pytest-asyncio==0.21.1; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# GraphRAG Retrieval System
+
+A modular retrieval system for graph-based retrieval augmented generation, designed for compliance domain applications.
+
+## Features
+
+- **Graph-based retrieval**: Uses Neo4j for storing and querying compliance documents
+- **Modular architecture**: Extensible design for different retrieval methods
+- **Compliance domain focus**: Specialized for regulatory and compliance use cases
+- **Async support**: Built with async/await for high performance
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+## Development Setup
+
+1. Clone the repository
+2. Create a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+## Usage
+
+```python
+from src.retrieval import GraphRAGRetriever
+from src.database import Neo4jClient
+
+# Initialize Neo4j client
+client = Neo4jClient("bolt://localhost:7687", "neo4j", "password")
+
+# Create retriever
+retriever = GraphRAGRetriever(client)
+
+# Retrieve relevant documents
+results = await retriever.retrieve("compliance query")
+```
+
+## Project Structure
+
+```
+graphrag-retrieval/
+├── src/
+│   ├── __init__.py
+│   ├── retrieval/          # Retrieval algorithms
+│   ├── database/           # Database connections
+│   └── models/             # Data models
+├── examples/               # Example usage
+├── tests/                  # Test suite
+└── docker-compose.yml      # Neo4j development setup
+```
+
+## License
+
+MIT License

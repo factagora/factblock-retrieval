@@ -1,0 +1,50 @@
+# Task ID: 4
+# Title: Implement Example Data Loader
+# Status: pending
+# Dependencies: 2, 3
+# Priority: medium
+# Description: Create data loader to populate Neo4j with sample compliance data for each node type, establishing relationships between nodes
+# Details:
+Create example_data_loader.py with sample data:
+```python
+from datetime import date
+from src.models.data_models import *
+from src.database.neo4j_client import Neo4jClient
+
+class ExampleDataLoader:
+    def __init__(self, neo4j_client: Neo4jClient):
+        self.client = neo4j_client
+        
+    def load_sample_data(self):
+        # Clear existing data
+        self._clear_database()
+        
+        # Create sample nodes
+        regulations = [
+            FederalRegulation(
+                name="GDPR",
+                citation="Regulation (EU) 2016/679",
+                description="General Data Protection Regulation",
+                effective_date=date(2018, 5, 25),
+                category=Category.DATA_PRIVACY
+            ),
+            # Add more examples
+        ]
+        
+        # Create nodes and relationships
+        self._create_regulations(regulations)
+        self._create_relationships()
+        
+    def _create_regulations(self, regulations):
+        with self.client.driver.session() as session:
+            for reg in regulations:
+                session.run(
+                    "CREATE (r:FederalRegulation {name: $name, citation: $citation, "
+                    "description: $description, effective_date: $effective_date, "
+                    "category: $category})",
+                    **reg.dict()
+                )
+```
+
+# Test Strategy:
+Verify all sample data is loaded correctly, check node counts match expected values, validate relationships are created properly using Cypher queries

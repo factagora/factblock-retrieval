@@ -1,0 +1,46 @@
+# Task ID: 8
+# Title: Implement Configuration Management
+# Status: pending
+# Dependencies: 1
+# Priority: medium
+# Description: Create configuration system for managing Neo4j connections, retrieval parameters, and future extensibility options
+# Details:
+Implement configuration management:
+```python
+# src/config.py
+from pydantic import BaseSettings, Field
+from typing import Optional, Dict, Any
+
+class Neo4jConfig(BaseSettings):
+    uri: str = Field(default="bolt://localhost:7687")
+    user: str = Field(default="neo4j")
+    password: str = Field(default="password123")
+    
+    class Config:
+        env_prefix = "NEO4J_"
+        
+class RetrievalConfig(BaseSettings):
+    default_limit: int = 10
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    score_threshold: float = 0.7
+    expand_hops: int = 2  # Graph expansion depth
+    
+    class Config:
+        env_prefix = "RETRIEVAL_"
+        
+class AppConfig:
+    def __init__(self):
+        self.neo4j = Neo4jConfig()
+        self.retrieval = RetrievalConfig()
+        
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'neo4j_uri': self.neo4j.uri,
+            'neo4j_user': self.neo4j.user,
+            'neo4j_password': self.neo4j.password,
+            'retrieval_config': self.retrieval.dict()
+        }
+```
+
+# Test Strategy:
+Test configuration loading from environment variables, validate default values, test configuration validation, ensure sensitive data is handled securely

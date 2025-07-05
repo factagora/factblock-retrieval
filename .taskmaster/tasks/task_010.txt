@@ -1,0 +1,52 @@
+# Task ID: 10
+# Title: Create Documentation and Usage Examples
+# Status: pending
+# Dependencies: 7, 9
+# Priority: low
+# Description: Write comprehensive documentation including API reference, usage examples, and deployment guide for developers integrating the module
+# Details:
+Create documentation structure:
+```markdown
+# GraphRAG Retrieval Module
+
+## Installation
+```bash
+pip install -e .
+```
+
+## Quick Start
+```python
+from graphrag_retrieval import RetrievalModule
+
+# Initialize module
+module = RetrievalModule('graphrag')
+module.initialize({
+    'neo4j_uri': 'bolt://localhost:7687',
+    'neo4j_user': 'neo4j',
+    'neo4j_password': 'password123'
+})
+
+# Perform retrieval
+results = module.retrieve(
+    query_text="Find all GDPR compliance requirements",
+    filters={'category': 'data_privacy'},
+    limit=10
+)
+
+for result in results:
+    print(f"Score: {result.score}")
+    print(f"Content: {result.content}")
+    print(f"Source: {result.source_type}")
+```
+
+## API Reference
+[Document all public methods]
+
+## Extending the Module
+[Guide for adding new retrieval methods]
+```
+
+Create example notebooks demonstrating various use cases
+
+# Test Strategy:
+Validate all code examples run without errors, ensure documentation is accurate and complete, test example scripts in fresh environment

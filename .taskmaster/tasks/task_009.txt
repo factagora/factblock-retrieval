@@ -1,0 +1,49 @@
+# Task ID: 9
+# Title: Build Comprehensive Test Suite
+# Status: pending
+# Dependencies: 7
+# Priority: medium
+# Description: Create unit tests, integration tests, and end-to-end tests for the retrieval module ensuring reliability and maintainability
+# Details:
+Implement test suite:
+```python
+# tests/test_retrieval.py
+import pytest
+from src.retrieval import RetrievalModule
+from src.database.neo4j_client import Neo4jClient
+from src.config import AppConfig
+
+@pytest.fixture
+def retrieval_module():
+    config = AppConfig()
+    module = RetrievalModule('graphrag')
+    module.initialize(config.to_dict())
+    return module
+    
+def test_basic_retrieval(retrieval_module):
+    results = retrieval_module.retrieve(
+        "Find regulations about data privacy",
+        filters={'category': 'data_privacy'},
+        limit=5
+    )
+    assert len(results) <= 5
+    assert all(r.score >= 0 for r in results)
+    
+def test_graph_expansion():
+    # Test that related nodes are included in results
+    pass
+    
+def test_error_handling():
+    module = RetrievalModule()
+    with pytest.raises(RuntimeError):
+        module.retrieve("test query")
+        
+# tests/test_integration.py
+@pytest.mark.integration
+def test_neo4j_connection():
+    # Test actual Neo4j connectivity
+    pass
+```
+
+# Test Strategy:
+Run pytest with coverage reports, ensure >80% code coverage, test both happy paths and error scenarios, validate integration with Neo4j

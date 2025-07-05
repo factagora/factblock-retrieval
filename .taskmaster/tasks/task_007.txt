@@ -1,0 +1,48 @@
+# Task ID: 7
+# Title: Create Module API Interface
+# Status: pending
+# Dependencies: 6
+# Priority: high
+# Description: Design and implement a clean API interface for the retrieval module that can be easily imported and used by other services
+# Details:
+Create main module interface:
+```python
+# src/retrieval/__init__.py
+from typing import Dict, Any, Optional
+from .graph_rag import GraphRAGRetriever
+from .base import RetrievalQuery, RetrievalResult
+
+class RetrievalModule:
+    def __init__(self, retriever_type: str = 'graphrag'):
+        self.retriever_type = retriever_type
+        self.retriever = None
+        self._initialized = False
+        
+    def initialize(self, config: Dict[str, Any]) -> None:
+        """Initialize the retrieval module with configuration"""
+        if self.retriever_type == 'graphrag':
+            self.retriever = GraphRAGRetriever()
+        else:
+            raise ValueError(f"Unknown retriever type: {self.retriever_type}")
+            
+        self.retriever.initialize(config)
+        self._initialized = True
+        
+    def retrieve(self, query_text: str, filters: Optional[Dict] = None, limit: int = 10):
+        """Main retrieval method"""
+        if not self._initialized:
+            raise RuntimeError("Module not initialized. Call initialize() first.")
+            
+        query = RetrievalQuery(
+            query_text=query_text,
+            filters=filters,
+            limit=limit
+        )
+        return self.retriever.retrieve(query)
+        
+# Export main classes
+__all__ = ['RetrievalModule', 'RetrievalQuery', 'RetrievalResult']
+```
+
+# Test Strategy:
+Test module import functionality, verify initialization flow, test error handling for uninitialized usage, validate API contract with mock services

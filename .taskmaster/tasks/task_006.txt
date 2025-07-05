@@ -1,0 +1,56 @@
+# Task ID: 6
+# Title: Implement Core GraphRAG Retrieval Logic
+# Status: pending
+# Dependencies: 2, 3, 5
+# Priority: high
+# Description: Build the main GraphRAG retrieval implementation using Neo4j, including graph traversal, relevance scoring, and result aggregation
+# Details:
+Implement GraphRAG retriever:
+```python
+from src.retrieval.base import BaseRetriever, RetrievalQuery, RetrievalResult
+from src.database.neo4j_client import Neo4jClient
+import numpy as np
+from typing import List, Dict, Any
+
+class GraphRAGRetriever(BaseRetriever):
+    def __init__(self):
+        self.client = None
+        self.embeddings_cache = {}
+        
+    def initialize(self, config: Dict[str, Any]) -> None:
+        self.client = Neo4jClient(
+            uri=config['neo4j_uri'],
+            user=config['neo4j_user'],
+            password=config['neo4j_password']
+        )
+        
+    def retrieve(self, query: RetrievalQuery) -> List[RetrievalResult]:
+        # 1. Generate query embedding (simplified for MVP)
+        query_embedding = self._generate_embedding(query.query_text)
+        
+        # 2. Find relevant nodes using graph traversal
+        relevant_nodes = self._graph_search(query_embedding, query.filters)
+        
+        # 3. Expand context using graph relationships
+        expanded_context = self._expand_context(relevant_nodes)
+        
+        # 4. Score and rank results
+        scored_results = self._score_results(expanded_context, query_embedding)
+        
+        # 5. Format and return top results
+        return self._format_results(scored_results[:query.limit])
+        
+    def _graph_search(self, embedding, filters):
+        cypher_query = """
+        MATCH (n)
+        WHERE n.description CONTAINS $search_text
+        OPTIONAL MATCH (n)-[r]-(connected)
+        RETURN n, collect(connected) as connections
+        LIMIT 20
+        """
+        # Execute search with filters
+        pass
+```
+
+# Test Strategy:
+Test retrieval with various query types, verify graph traversal logic, validate scoring algorithm, ensure results are properly ranked and formatted
