@@ -5,7 +5,7 @@ Live Demo of GraphRAG Retrieval System
 
 import os
 import sys
-sys.path.insert(0, '/Users/randybaek/workspace/factblock-retrieval')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.retrieval import RetrievalModule
 from src.config import load_config

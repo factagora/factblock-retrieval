@@ -22,7 +22,7 @@ class Neo4jConfig(BaseSettings):
     """
     uri: str = Field(default="bolt://localhost:7687", description="Neo4j database URI")
     user: str = Field(default="neo4j", description="Database username")
-    password: str = Field(default="password123", description="Database password")
+    password: str = Field(..., description="Database password")
     
     class Config:
         env_prefix = "NEO4J_"
