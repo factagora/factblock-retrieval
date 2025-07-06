@@ -108,7 +108,18 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
         chmod 600 ~/.ssh/azure_vm_key
-        ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
+        
+        # Debug: Check if IP is set
+        echo "VM IP: ${{ secrets.AZURE_VM_IP }}"
+        echo "VM User: ${{ secrets.AZURE_VM_USER }}"
+        
+        # Add host key to known_hosts
+        if [ -n "${{ secrets.AZURE_VM_IP }}" ]; then
+          ssh-keyscan -H "${{ secrets.AZURE_VM_IP }}" >> ~/.ssh/known_hosts
+        else
+          echo "Error: AZURE_VM_IP secret not set"
+          exit 1
+        fi
     
     - name: Deploy to Azure VM
       run: |
@@ -237,7 +248,14 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
         chmod 600 ~/.ssh/azure_vm_key
-        ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
+        
+        # Add host key to known_hosts
+        if [ -n "${{ secrets.AZURE_VM_IP }}" ]; then
+          ssh-keyscan -H "${{ secrets.AZURE_VM_IP }}" >> ~/.ssh/known_hosts
+        else
+          echo "Error: AZURE_VM_IP secret not set"
+          exit 1
+        fi
         
         # Rollback script
         cat > rollback_script.sh << 'EOF'
