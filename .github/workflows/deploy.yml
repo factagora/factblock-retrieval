@@ -108,30 +108,37 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         
-        # Debug: Check if secrets are set
-        echo "VM IP: '${{ secrets.AZURE_VM_IP }}'"
-        echo "VM User: '${{ secrets.AZURE_VM_USER }}'"
-        echo "SSH Key starts with: $(echo '${{ secrets.AZURE_VM_SSH_KEY }}' | head -c 50)..."
+        # Debug: Check if secrets are set (GitHub secrets are write-only, so we test access)
+        echo "VM IP length: ${#AZURE_VM_IP}"
+        echo "VM User length: ${#AZURE_VM_USER}" 
+        echo "SSH Key length: ${#AZURE_VM_SSH_KEY}"
+        echo "VM IP starts with: $(echo "$AZURE_VM_IP" | head -c 5)..."
+        echo "VM User starts with: $(echo "$AZURE_VM_USER" | head -c 3)..."
+        echo "SSH Key starts with: $(echo "$AZURE_VM_SSH_KEY" | head -c 50)..."
+      env:
+        AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
+        AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
+        AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
         
         # Check if secrets are actually set
-        if [ -z "${{ secrets.AZURE_VM_IP }}" ]; then
+        if [ -z "$AZURE_VM_IP" ]; then
           echo "❌ ERROR: AZURE_VM_IP secret is empty or not set!"
           echo "Please check GitHub repository Settings → Secrets and variables → Actions"
           exit 1
         fi
         
-        if [ -z "${{ secrets.AZURE_VM_USER }}" ]; then
+        if [ -z "$AZURE_VM_USER" ]; then
           echo "❌ ERROR: AZURE_VM_USER secret is empty or not set!"
           exit 1
         fi
         
-        if [ -z "${{ secrets.AZURE_VM_SSH_KEY }}" ]; then
+        if [ -z "$AZURE_VM_SSH_KEY" ]; then
           echo "❌ ERROR: AZURE_VM_SSH_KEY secret is empty or not set!"
           exit 1
         fi
         
         # Create SSH key file with proper formatting
-        echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
+        echo "$AZURE_VM_SSH_KEY" > ~/.ssh/azure_vm_key
         
         # Fix permissions (important!)
         chmod 600 ~/.ssh/azure_vm_key
@@ -145,19 +152,18 @@ jobs:
         ssh-keygen -l -f ~/.ssh/azure_vm_key || echo "SSH key validation failed"
         
         # Add host key to known_hosts
-        if [ -n "${{ secrets.AZURE_VM_IP }}" ]; then
-          ssh-keyscan -H "${{ secrets.AZURE_VM_IP }}" >> ~/.ssh/known_hosts
-          echo "Host key added to known_hosts"
-        else
-          echo "Error: AZURE_VM_IP secret not set"
-          exit 1
-        fi
+        echo "Adding host key to known_hosts..."
+        ssh-keyscan -H "$AZURE_VM_IP" >> ~/.ssh/known_hosts
+        echo "Host key added to known_hosts"
         
         # Test SSH connection
         echo "Testing SSH connection..."
-        ssh -i ~/.ssh/azure_vm_key -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }} "echo 'SSH connection test successful'"
+        ssh -i ~/.ssh/azure_vm_key -o ConnectTimeout=10 -o StrictHostKeyChecking=no "$AZURE_VM_USER@$AZURE_VM_IP" "echo 'SSH connection test successful'"
     
     - name: Deploy to Azure VM
+      env:
+        AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
+        AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
       run: |
         # Create deployment script
         cat > deploy_script.sh << 'EOF'
@@ -232,10 +238,12 @@ jobs:
         EOF
         
         # Upload and execute deployment script
-        scp -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no deploy_script.sh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }}:~/
-        ssh -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }} "chmod +x ~/deploy_script.sh && ~/deploy_script.sh"
+        scp -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no deploy_script.sh "$AZURE_VM_USER@$AZURE_VM_IP":~/
+        ssh -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no "$AZURE_VM_USER@$AZURE_VM_IP" "chmod +x ~/deploy_script.sh && ~/deploy_script.sh"
     
     - name: Post-deployment validation
+      env:
+        AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
       run: |
         echo "🔍 Running external validation..."
         
@@ -243,7 +251,7 @@ jobs:
         sleep 10
         
         # Test external API access
-        if curl -f http://${{ secrets.AZURE_VM_IP }}:8001/health; then
+        if curl -f "http://$AZURE_VM_IP:8001/health"; then
           echo "✅ External API access confirmed"
         else
           echo "❌ External API access failed"
@@ -251,7 +259,7 @@ jobs:
         fi
         
         # Test example texts from external
-        if curl -f http://${{ secrets.AZURE_VM_IP }}:8001/example-texts >/dev/null 2>&1; then
+        if curl -f "http://$AZURE_VM_IP:8001/example-texts" >/dev/null 2>&1; then
           echo "✅ External example texts access confirmed"
         else
           echo "❌ External example texts access failed"
@@ -262,10 +270,12 @@ jobs:
     
     - name: Notification
       if: always()
+      env:
+        AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
       run: |
         if [ "${{ job.status }}" == "success" ]; then
           echo "✅ Deployment completed successfully!"
-          echo "🌐 GraphRAG API is live at: http://${{ secrets.AZURE_VM_IP }}:8001"
+          echo "🌐 GraphRAG API is live at: http://$AZURE_VM_IP:8001"
         else
           echo "❌ Deployment failed!"
         fi
