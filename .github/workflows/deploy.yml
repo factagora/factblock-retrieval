@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 env:
   AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
