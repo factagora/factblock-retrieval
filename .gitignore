@@ -22,4 +22,4 @@ node_modules/
 *.sw?
 
 # OS specific
-.DS_Store
+.DS_Storevenv/

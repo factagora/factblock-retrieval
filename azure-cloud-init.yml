@@ -1,0 +1,103 @@
+#cloud-config
+# Azure VM Cloud-Init Script for GraphRAG Fact-Check API
+
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - software-properties-common
+  - git
+  - unzip
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt-get update -y
+  - apt-get install -y docker-ce docker-ce-cli containerd.io
+  
+  # Install Docker Compose
+  - curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+  
+  # Add ubuntu user to docker group
+  - usermod -aG docker ubuntu
+  
+  # Create application directory
+  - mkdir -p /opt/factblock-retrieval
+  - chown ubuntu:ubuntu /opt/factblock-retrieval
+  
+  # Start Docker service
+  - systemctl enable docker
+  - systemctl start docker
+
+write_files:
+  - path: /opt/factblock-retrieval/README.md
+    content: |
+      # GraphRAG Fact-Check API Deployment
+      
+      ## Setup Instructions
+      
+      1. Upload your project files to /opt/factblock-retrieval/
+      2. Create environment file:
+         ```bash
+         cd /opt/factblock-retrieval
+         cp .env.production .env
+         nano .env  # Edit with your Azure OpenAI credentials
+         ```
+      
+      3. Start the services:
+         ```bash
+         sudo docker-compose up -d
+         ```
+      
+      4. Check status:
+         ```bash
+         sudo docker-compose ps
+         sudo docker-compose logs -f
+         ```
+      
+      ## Accessing Services
+      - API: http://YOUR_VM_IP:8001
+      - Neo4j Browser: http://YOUR_VM_IP:7474
+      - API Health: http://YOUR_VM_IP:8001/health
+      - API Debug: http://YOUR_VM_IP:8001/debug
+      
+      ## Management Commands
+      - Stop: `sudo docker-compose down`
+      - Restart: `sudo docker-compose restart`
+      - View logs: `sudo docker-compose logs -f api`
+      - Update: `git pull && sudo docker-compose up -d --build`
+
+  - path: /etc/systemd/system/factblock-retrieval.service
+    content: |
+      [Unit]
+      Description=GraphRAG Fact-Check API
+      Requires=docker.service
+      After=docker.service
+      
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      WorkingDirectory=/opt/factblock-retrieval
+      ExecStart=/usr/local/bin/docker-compose up -d
+      ExecStop=/usr/local/bin/docker-compose down
+      TimeoutStartSec=300
+      User=ubuntu
+      Group=ubuntu
+      
+      [Install]
+      WantedBy=multi-user.target
+
+final_message: |
+  GraphRAG Fact-Check API VM setup complete!
+  
+  Next steps:
+  1. SSH into the VM
+  2. Upload your project files to /opt/factblock-retrieval/
+  3. Configure environment variables in .env
+  4. Start the services with: sudo systemctl start factblock-retrieval
+  
+  Your API will be available at http://VM_IP:8001

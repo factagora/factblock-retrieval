@@ -14,7 +14,11 @@ import json
 import re
 import time
 from datetime import datetime
-import openai
+from openai import OpenAI, AzureOpenAI
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add project root to path for imports
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,15 +43,89 @@ azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
 azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
 azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
 
-if azure_endpoint and azure_api_key:
-    openai.api_type = "azure"
-    openai.api_base = azure_endpoint
-    openai.api_key = azure_api_key
-    openai.api_version = "2024-02-15-preview"
-    use_azure = True
-else:
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    use_azure = False
+# Initialize client variables
+openai_client = None
+use_azure = False
+
+def test_azure_client():
+    """Test Azure OpenAI client creation"""
+    try:
+        print("Testing Azure OpenAI client creation...")
+        test_client = AzureOpenAI(
+            api_key=azure_api_key,
+            api_version="2024-02-15-preview",
+            azure_endpoint=azure_endpoint
+        )
+        print("✓ Azure OpenAI client created successfully")
+        return test_client
+    except Exception as e:
+        print(f"❌ Azure OpenAI client creation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def initialize_openai_client():
+    """Initialize OpenAI client with proper error handling"""
+    global openai_client, use_azure
+    
+    print(f"Initializing OpenAI client...")
+    print(f"Azure endpoint: {azure_endpoint}")
+    print(f"Azure API key present: {bool(azure_api_key)}")
+    print(f"Azure deployment: {azure_deployment}")
+    
+    try:
+        if azure_endpoint and azure_api_key:
+            print("Attempting to initialize Azure OpenAI client...")
+            
+            # Try to create the client with more specific error handling
+            try:
+                openai_client = AzureOpenAI(
+                    api_key=azure_api_key,
+                    api_version="2024-02-15-preview",
+                    azure_endpoint=azure_endpoint
+                )
+                use_azure = True
+                print("✓ Successfully initialized Azure OpenAI client")
+                
+                # Test the client with a simple call
+                print("Testing Azure OpenAI client with simple call...")
+                # Note: We won't actually make a call during initialization to avoid costs
+                
+            except ImportError as e:
+                print(f"❌ Import error with AzureOpenAI: {e}")
+                openai_client = None
+                use_azure = False
+            except Exception as e:
+                print(f"❌ Azure OpenAI initialization failed: {e}")
+                print("Falling back to regular OpenAI...")
+                openai_api_key = os.getenv("OPENAI_API_KEY")
+                if openai_api_key:
+                    openai_client = OpenAI(api_key=openai_api_key)
+                    use_azure = False
+                    print("✓ Successfully initialized fallback OpenAI client")
+                else:
+                    print("❌ No fallback OpenAI API key available")
+                    openai_client = None
+                    use_azure = False
+        else:
+            print("Azure credentials not available, trying regular OpenAI...")
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if openai_api_key:
+                openai_client = OpenAI(api_key=openai_api_key)
+                use_azure = False
+                print("✓ Successfully initialized OpenAI client")
+            else:
+                print("❌ Warning: No OpenAI API keys found")
+                openai_client = None
+                
+    except Exception as e:
+        print(f"❌ Failed to initialize OpenAI client: {e}")
+        import traceback
+        traceback.print_exc()
+        openai_client = None
+        use_azure = False
+    
+    print(f"Final state: openai_client = {openai_client is not None}, use_azure = {use_azure}")
 
 # Global retrieval module - initialized on startup
 retrieval_module = None
@@ -61,6 +139,11 @@ class GraphRAGFactCheckInstance(BaseModel):
     end_index: Optional[int] = Field(None, description="End position in original text")
     compliance_evidence: Optional[List[Dict[str, Any]]] = Field(None, description="Supporting compliance documents")
     source_reliability: Optional[float] = Field(None, description="Reliability score of sources")
+    
+    # Hybrid fact-checking results
+    graphrag_result: Optional[Dict[str, Any]] = Field(None, description="GraphRAG-based fact-check result")
+    llm_result: Optional[Dict[str, Any]] = Field(None, description="LLM-based fact-check result")
+    hybrid_confidence: Optional[float] = Field(None, description="Combined confidence from both methods")
 
 class GraphRAGFactCheckRequest(BaseModel):
     text: str = Field(..., min_length=1, description="Text to fact-check")
@@ -77,6 +160,7 @@ class GraphRAGFactCheckResponse(BaseModel):
     timestamp: str
     evidence_summary: Dict[str, Any]
     compliance_coverage: Dict[str, float]
+    hybrid_summary: Dict[str, Any] = Field(default_factory=dict, description="Summary of hybrid fact-checking results")
 
 def initialize_retrieval_system():
     """Initialize the GraphRAG retrieval system"""
@@ -177,82 +261,119 @@ def retrieve_compliance_evidence(claim_text: str, compliance_focus: Optional[Lis
         print(f"Error retrieving compliance evidence: {e}")
         return []
 
-def analyze_claim_with_evidence(claim: Dict[str, Any], evidence: List[Dict[str, Any]]) -> GraphRAGFactCheckInstance:
-    """Analyze a claim using retrieved compliance evidence and AI"""
-    
-    # Prepare evidence summary for AI analysis
-    evidence_text = ""
-    if evidence:
-        evidence_text = "\n".join([
-            f"- {doc['source_type']}: {doc['content'][:200]}... (Score: {doc['score']:.3f})"
-            for doc in evidence[:3]  # Use top 3 pieces of evidence
-        ])
-    
-    # Calculate source reliability
-    source_reliability = None
-    if evidence:
-        # Weight by score and source type reliability
-        source_weights = {
-            'FederalRegulation': 1.0,
-            'AgencyGuidance': 0.9,
-            'EnforcementAction': 0.8,
-            'other': 0.6
+def graphrag_fact_check(claim: Dict[str, Any], evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Stage 1: GraphRAG-based fact-checking using retrieved evidence
+    """
+    if not evidence:
+        return {
+            'label': 'Needs Verification',
+            'confidence': 0.3,
+            'reasoning': 'No relevant compliance evidence found in GraphRAG',
+            'evidence_count': 0,
+            'avg_score': 0.0
         }
-        
-        total_weight = 0
-        weighted_score = 0
-        for doc in evidence:
-            weight = source_weights.get(doc['source_type'], 0.6)
-            total_weight += weight
-            weighted_score += doc['score'] * weight
-        
-        source_reliability = weighted_score / total_weight if total_weight > 0 else 0.5
     
-    # Prepare AI prompt for analysis
-    system_prompt = """You are a compliance fact-checking expert. Analyze the claim against the provided compliance evidence and determine:
+    # Calculate evidence-based assessment
+    avg_score = sum(doc['score'] for doc in evidence) / len(evidence)
+    evidence_count = len(evidence)
+    
+    # Source reliability weighting
+    source_weights = {
+        'FederalRegulation': 1.0,
+        'AgencyGuidance': 0.9,
+        'EnforcementAction': 0.8,
+        'other': 0.6
+    }
+    
+    total_weight = 0
+    weighted_score = 0
+    for doc in evidence:
+        weight = source_weights.get(doc['source_type'], 0.6)
+        total_weight += weight
+        weighted_score += doc['score'] * weight
+    
+    reliability = weighted_score / total_weight if total_weight > 0 else 0.5
+    
+    # GraphRAG logic for fact-checking
+    if avg_score >= 0.8 and evidence_count >= 3:
+        label = 'Likely True'
+        confidence = min(0.9, reliability * 0.9)
+        reasoning = f"Strong support from {evidence_count} high-quality compliance documents (avg score: {avg_score:.3f})"
+    elif avg_score >= 0.6 and evidence_count >= 2:
+        label = 'Likely True'
+        confidence = min(0.8, reliability * 0.8)
+        reasoning = f"Good support from {evidence_count} compliance documents (avg score: {avg_score:.3f})"
+    elif avg_score >= 0.4:
+        label = 'Needs Verification'
+        confidence = 0.6
+        reasoning = f"Partial support from {evidence_count} compliance documents (avg score: {avg_score:.3f})"
+    else:
+        label = 'Likely False'
+        confidence = 0.4
+        reasoning = f"Limited or contradictory evidence from {evidence_count} documents (avg score: {avg_score:.3f})"
+    
+    return {
+        'label': label,
+        'confidence': confidence,
+        'reasoning': reasoning,
+        'evidence_count': evidence_count,
+        'avg_score': avg_score,
+        'source_reliability': reliability
+    }
 
-1. Label: "Likely True", "Likely False", "Needs Verification", "Neutral", "Compliance Issue"
+def llm_fact_check(claim: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Stage 2: LLM-based fact-checking using general knowledge
+    """
+    if not openai_client:
+        return {
+            'label': 'Needs Verification',
+            'confidence': 0.3,
+            'reasoning': 'LLM not available for independent fact-checking',
+            'method': 'fallback'
+        }
+    
+    system_prompt = """You are an expert fact-checker. Analyze the given claim using your general knowledge and reasoning abilities.
+
+Provide a fact-check assessment with:
+1. Label: "Likely True", "Likely False", "Needs Verification", "Neutral"
 2. Confidence score (0.0 to 1.0)
-3. Detailed reasoning
+3. Detailed reasoning based on your knowledge
 
 Consider:
-- "Likely True": Claim is supported by compliance evidence
-- "Likely False": Claim contradicts compliance evidence
-- "Needs Verification": Insufficient evidence to determine
-- "Neutral": No factual claims about compliance
-- "Compliance Issue": Claim indicates potential compliance violation
+- "Likely True": Claim aligns with established facts and knowledge
+- "Likely False": Claim contradicts established facts or contains errors
+- "Needs Verification": Claim requires additional evidence or is uncertain
+- "Neutral": Statement doesn't make factual claims
 
-Focus on regulatory accuracy, data consistency, and compliance alignment."""
+Focus on factual accuracy, logical consistency, and plausibility."""
 
-    user_prompt = f"""Claim to analyze: "{claim['text']}"
+    user_prompt = f"""Claim to fact-check: "{claim['text']}"
 
-Relevant Compliance Evidence:
-{evidence_text if evidence_text else "No specific compliance evidence found."}
-
-Provide analysis as JSON:
-{{"label": "string", "confidence": 0.85, "reasoning": "detailed explanation"}}"""
+Provide your analysis as JSON:
+{{"label": "string", "confidence": 0.85, "reasoning": "detailed explanation based on general knowledge"}}"""
 
     try:
-        # Call AI for analysis
         if use_azure:
-            response = openai.ChatCompletion.create(
-                engine=azure_deployment,
+            response = openai_client.chat.completions.create(
+                model=azure_deployment,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.1,
-                max_tokens=500
+                temperature=0.2,
+                max_tokens=400
             )
         else:
-            response = openai.ChatCompletion.create(
+            response = openai_client.chat.completions.create(
                 model="gpt-4" if os.getenv("OPENAI_API_KEY") else "gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.1,
-                max_tokens=500
+                temperature=0.2,
+                max_tokens=400
             )
         
         content = response.choices[0].message.content.strip()
@@ -264,60 +385,132 @@ Provide analysis as JSON:
             
             if json_start != -1 and json_end != 0:
                 json_str = content[json_start:json_end]
-                ai_result = json.loads(json_str)
+                llm_result = json.loads(json_str)
                 
-                return GraphRAGFactCheckInstance(
-                    label=ai_result.get("label", "Neutral"),
-                    text=claim['text'],
-                    confidence=float(ai_result.get("confidence", 0.5)),
-                    reasoning=ai_result.get("reasoning", "AI analysis completed"),
-                    start_index=claim.get('start_index'),
-                    end_index=claim.get('end_index'),
-                    compliance_evidence=evidence,
-                    source_reliability=source_reliability
-                )
+                return {
+                    'label': llm_result.get('label', 'Needs Verification'),
+                    'confidence': float(llm_result.get('confidence', 0.5)),
+                    'reasoning': llm_result.get('reasoning', 'LLM analysis completed'),
+                    'method': 'llm'
+                }
         except json.JSONDecodeError:
             pass
             
     except Exception as e:
-        print(f"AI analysis error: {e}")
+        print(f"LLM fact-check error: {e}")
     
-    # Fallback analysis based on evidence
-    if evidence:
-        # Simple heuristic based on evidence quality
-        avg_score = sum(doc['score'] for doc in evidence) / len(evidence)
-        
-        if avg_score > 0.8:
-            label = "Likely True"
-            confidence = 0.8
-            reasoning = f"Supported by {len(evidence)} high-quality compliance documents"
-        elif avg_score > 0.5:
-            label = "Needs Verification"
-            confidence = 0.6
-            reasoning = f"Partial support from {len(evidence)} compliance documents"
-        else:
-            label = "Needs Verification"
-            confidence = 0.4
-            reasoning = f"Limited support from available compliance evidence"
+    # Fallback
+    return {
+        'label': 'Needs Verification',
+        'confidence': 0.3,
+        'reasoning': 'LLM analysis failed - unable to process claim',
+        'method': 'fallback'
+    }
+
+def combine_hybrid_results(graphrag_result: Dict[str, Any], llm_result: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Combine GraphRAG and LLM results into a final hybrid assessment
+    """
+    # Label mapping for consistency
+    label_weights = {
+        'Likely True': 1.0,
+        'Likely False': -1.0,
+        'Needs Verification': 0.0,
+        'Neutral': 0.0,
+        'Compliance Issue': -0.5
+    }
+    
+    graphrag_weight = label_weights.get(graphrag_result['label'], 0.0)
+    llm_weight = label_weights.get(llm_result['label'], 0.0)
+    
+    # Weight GraphRAG higher for compliance-related claims
+    graphrag_importance = 0.6
+    llm_importance = 0.4
+    
+    # Calculate combined confidence
+    combined_confidence = (
+        graphrag_result['confidence'] * graphrag_importance +
+        llm_result['confidence'] * llm_importance
+    )
+    
+    # Determine final label based on weighted scores
+    combined_weight = graphrag_weight * graphrag_importance + llm_weight * llm_importance
+    
+    if combined_weight > 0.3:
+        final_label = 'Likely True'
+    elif combined_weight < -0.3:
+        final_label = 'Likely False'
     else:
-        label = "Needs Verification"
-        confidence = 0.3
-        reasoning = "No relevant compliance evidence found"
+        final_label = 'Needs Verification'
+    
+    # Adjust confidence based on agreement
+    if graphrag_result['label'] == llm_result['label']:
+        # Both methods agree - boost confidence
+        combined_confidence = min(0.95, combined_confidence * 1.2)
+        agreement = 'high'
+    elif (graphrag_weight > 0) == (llm_weight > 0):
+        # Same direction but different labels - moderate confidence
+        combined_confidence = combined_confidence * 0.9
+        agreement = 'moderate'
+    else:
+        # Disagreement - lower confidence
+        combined_confidence = combined_confidence * 0.7
+        agreement = 'low'
+    
+    reasoning = f"Hybrid analysis: GraphRAG says '{graphrag_result['label']}' (confidence: {graphrag_result['confidence']:.2f}), LLM says '{llm_result['label']}' (confidence: {llm_result['confidence']:.2f}). Agreement: {agreement}. {graphrag_result['reasoning']} | {llm_result['reasoning']}"
+    
+    return {
+        'label': final_label,
+        'confidence': combined_confidence,
+        'reasoning': reasoning,
+        'agreement': agreement,
+        'graphrag_weight': graphrag_importance,
+        'llm_weight': llm_importance
+    }
+
+def analyze_claim_with_evidence(claim: Dict[str, Any], evidence: List[Dict[str, Any]]) -> GraphRAGFactCheckInstance:
+    """
+    Hybrid fact-checking: Combine GraphRAG and LLM approaches
+    """
+    
+    # Stage 1: GraphRAG-based fact-checking
+    print(f"Stage 1: GraphRAG fact-checking for claim: {claim['text'][:50]}...")
+    graphrag_result = graphrag_fact_check(claim, evidence)
+    
+    # Stage 2: LLM-based fact-checking  
+    print(f"Stage 2: LLM fact-checking for claim: {claim['text'][:50]}...")
+    llm_result = llm_fact_check(claim)
+    
+    # Stage 3: Combine results
+    print(f"Stage 3: Combining hybrid results...")
+    hybrid_result = combine_hybrid_results(graphrag_result, llm_result)
+    
+    # Calculate source reliability from evidence
+    source_reliability = graphrag_result.get('source_reliability', 0.5)
     
     return GraphRAGFactCheckInstance(
-        label=label,
+        label=hybrid_result['label'],
         text=claim['text'],
-        confidence=confidence,
-        reasoning=reasoning,
+        confidence=hybrid_result['confidence'],
+        reasoning=hybrid_result['reasoning'],
         start_index=claim.get('start_index'),
         end_index=claim.get('end_index'),
         compliance_evidence=evidence,
-        source_reliability=source_reliability
+        source_reliability=source_reliability,
+        
+        # Store individual results for transparency
+        graphrag_result=graphrag_result,
+        llm_result=llm_result,
+        hybrid_confidence=hybrid_result['confidence']
     )
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the retrieval system on startup"""
+    """Initialize the retrieval system and OpenAI client on startup"""
+    # Initialize OpenAI client
+    initialize_openai_client()
+    
+    # Initialize retrieval system
     success = initialize_retrieval_system()
     if not success:
         print("Warning: GraphRAG retrieval system failed to initialize")
@@ -388,13 +581,28 @@ async def fact_check_with_graphrag(request: GraphRAGFactCheckRequest):
             "categories_covered": list(compliance_categories.keys())
         }
         
+        # Hybrid summary
+        hybrid_summary = {
+            "method": "hybrid_graphrag_llm",
+            "total_claims_analyzed": len(instances),
+            "graphrag_available": bool(retrieval_module),
+            "llm_available": bool(openai_client),
+            "avg_hybrid_confidence": sum(inst.hybrid_confidence for inst in instances if inst.hybrid_confidence) / len(instances) if instances else 0,
+            "agreement_distribution": {
+                "high": sum(1 for inst in instances if inst.graphrag_result and inst.llm_result and inst.graphrag_result.get('label') == inst.llm_result.get('label')),
+                "moderate": sum(1 for inst in instances if inst.graphrag_result and inst.llm_result and inst.graphrag_result.get('label') != inst.llm_result.get('label')),
+                "low": sum(1 for inst in instances if not inst.graphrag_result or not inst.llm_result)
+            }
+        }
+        
         return GraphRAGFactCheckResponse(
             instances=instances,
             total_claims=len(instances),
             processing_time=round(processing_time, 3),
             timestamp=datetime.now().isoformat(),
             evidence_summary=evidence_summary,
-            compliance_coverage=compliance_coverage
+            compliance_coverage=compliance_coverage,
+            hybrid_summary=hybrid_summary
         )
         
     except Exception as e:
@@ -408,7 +616,37 @@ async def health_check():
         "service": "graphrag-fact-check-api",
         "retrieval_system": "available" if retrieval_module else "unavailable",
         "ai_provider": "azure-openai" if use_azure else "openai",
-        "features": ["compliance-evidence", "graphrag-retrieval", "ai-analysis"]
+        "llm_client": "available" if openai_client else "unavailable",
+        "features": ["hybrid-fact-checking", "compliance-evidence", "graphrag-retrieval", "llm-analysis"],
+        "fact_check_method": "hybrid_graphrag_llm"
+    }
+
+@app.get("/debug")
+async def debug_status():
+    """Debug endpoint to check initialization status"""
+    return {
+        "openai_client_initialized": openai_client is not None,
+        "use_azure": use_azure,
+        "azure_endpoint": azure_endpoint,
+        "azure_api_key_present": bool(azure_api_key),
+        "azure_deployment": azure_deployment,
+        "retrieval_module_initialized": retrieval_module is not None,
+        "environment_variables": {
+            "AZURE_OPENAI_ENDPOINT": bool(os.getenv("AZURE_OPENAI_ENDPOINT")),
+            "AZURE_OPENAI_API_KEY": bool(os.getenv("AZURE_OPENAI_API_KEY")),
+            "AZURE_OPENAI_DEPLOYMENT": bool(os.getenv("AZURE_OPENAI_DEPLOYMENT")),
+            "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY"))
+        }
+    }
+
+@app.post("/reinitialize-openai")
+async def reinitialize_openai():
+    """Manually reinitialize OpenAI client"""
+    initialize_openai_client()
+    return {
+        "success": openai_client is not None,
+        "use_azure": use_azure,
+        "message": "OpenAI client reinitialized" if openai_client else "OpenAI client initialization failed"
     }
 
 @app.get("/")
