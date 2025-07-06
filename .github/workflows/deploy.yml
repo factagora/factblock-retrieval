@@ -172,9 +172,10 @@ jobs:
         
         echo "🚀 Starting deployment..."
         
-        # Check if application directory exists, if not, clone it
-        if [ ! -d "/opt/factblock-retrieval" ]; then
-          echo "📁 Creating application directory and cloning repository..."
+        # Check if application directory exists and is a git repository
+        if [ ! -d "/opt/factblock-retrieval/.git" ]; then
+          echo "📁 Setting up application directory and repository..."
+          sudo rm -rf /opt/factblock-retrieval || true
           sudo mkdir -p /opt
           sudo git clone https://github.com/factagora/factblock-retrieval.git /opt/factblock-retrieval
           sudo chown -R $(whoami):$(whoami) /opt/factblock-retrieval
@@ -188,7 +189,7 @@ jobs:
           sudo cp -r src src_backup_$(date +%Y%m%d_%H%M%S) || true
         fi
         
-        # Pull latest changes
+        # Pull latest changes (now we know it's a git repo)
         sudo git fetch origin
         sudo git reset --hard origin/main
         
