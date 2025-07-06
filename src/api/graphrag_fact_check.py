@@ -649,6 +649,119 @@ async def reinitialize_openai():
         "message": "OpenAI client reinitialized" if openai_client else "OpenAI client initialization failed"
     }
 
+class ExampleText(BaseModel):
+    id: str = Field(..., description="Unique identifier for the example")
+    title: str = Field(..., description="Brief title describing the example")
+    text: str = Field(..., description="The example text to fact-check")
+    category: str = Field(..., description="Category of compliance/regulatory focus")
+    complexity: str = Field(..., description="Complexity level: basic, intermediate, advanced")
+    why_graphrag_better: str = Field(..., description="Explanation of why GraphRAG performs better than LLM-only")
+    expected_evidence_types: List[str] = Field(..., description="Types of evidence GraphRAG should find")
+
+class ExampleTextsResponse(BaseModel):
+    examples: List[ExampleText]
+    total_count: int
+    categories: List[str]
+    description: str
+
+@app.get("/example-texts", response_model=ExampleTextsResponse)
+async def get_example_texts():
+    """
+    Get curated example texts that showcase GraphRAG's superior fact-checking capabilities
+    over LLM-only approaches for investor demonstrations
+    """
+    
+    examples = [
+        ExampleText(
+            id="gdpr-retention-1",
+            title="GDPR Data Retention Requirements",
+            text="Under GDPR Article 5(1)(e), personal data must be kept in a form which permits identification of data subjects for no longer than is necessary for the purposes for which the personal data are processed. The regulation specifically requires deletion after 72 hours for breach notifications and 30 days for standard user data deletion requests.",
+            category="data_privacy",
+            complexity="intermediate",
+            why_graphrag_better="LLMs often confuse GDPR timelines and mix up different requirements. GraphRAG can cross-reference specific GDPR articles, enforcement cases, and regulatory guidance to verify exact timeframes and contexts.",
+            expected_evidence_types=["GDPR_Article", "DPA_Guidance", "Court_Cases", "Enforcement_Actions"]
+        ),
+        
+        ExampleText(
+            id="soc2-controls-1",
+            title="SOC 2 Type II Control Implementation",
+            text="Our company has implemented SOC 2 Type II controls including CC6.1 for logical access controls, which requires multi-factor authentication for all privileged users. According to our assessment, we achieved 99.8% uptime compliance and passed all 147 control points with zero exceptions, meeting the AICPA standards for security and availability.",
+            category="compliance_audit",
+            complexity="advanced",
+            why_graphrag_better="LLMs lack access to current AICPA standards, specific control mappings, and industry benchmarks. GraphRAG can validate against actual SOC 2 frameworks, compare to industry standards, and check if the control numbers and requirements are accurate.",
+            expected_evidence_types=["AICPA_Standards", "SOC2_Framework", "Control_Mappings", "Industry_Benchmarks"]
+        ),
+        
+        ExampleText(
+            id="financial-reporting-1",
+            title="SEC Financial Disclosure Requirements",
+            text="Under Section 404 of the Sarbanes-Oxley Act, our quarterly 10-Q filing reported internal control deficiencies that were remediated within the required 90-day window. The company's ICFR assessment showed material weaknesses in revenue recognition controls, specifically related to ASC 606 implementation for our SaaS subscription model.",
+            category="financial",
+            complexity="advanced",
+            why_graphrag_better="LLMs often have outdated information about SEC requirements and accounting standards. GraphRAG can access current SEC guidance, recent enforcement actions, and specific ASC 606 implementation requirements to validate compliance claims.",
+            expected_evidence_types=["SEC_Rules", "SOX_Requirements", "ASC_606_Standards", "Enforcement_Actions"]
+        ),
+        
+        ExampleText(
+            id="pharmaceutical-fda-1",
+            title="FDA Drug Approval Process Timeline",
+            text="Our Phase III clinical trial for the new diabetes medication has enrolled 2,847 patients across 45 sites, exceeding the FDA's minimum requirement of 1,500 patients for Type 2 diabetes drugs. The trial is expected to complete in Q2 2024, with NDA submission planned for Q3 2024, targeting approval by end of 2024 based on FDA's 6-month priority review timeline.",
+            category="pharmaceutical",
+            complexity="intermediate",
+            why_graphrag_better="LLMs may not have current FDA guidance on trial requirements and review timelines. GraphRAG can access recent FDA guidance documents, approval statistics, and regulatory precedents to verify requirements and realistic timelines.",
+            expected_evidence_types=["FDA_Guidance", "Clinical_Trial_Requirements", "Approval_Statistics", "Review_Timelines"]
+        ),
+        
+        ExampleText(
+            id="cybersecurity-breach-1",
+            title="CISA Cybersecurity Incident Reporting",
+            text="Following the ransomware attack on our infrastructure, we reported the incident to CISA within the required 72-hour window under the new Cyber Incident Reporting for Critical Infrastructure Act. The attack affected our customer database containing 50,000 records, triggering additional state notification requirements in California, New York, and Texas within 3 business days.",
+            category="cybersecurity",
+            complexity="advanced",
+            why_graphrag_better="LLMs may not have the latest cybersecurity reporting requirements and state-specific breach notification laws. GraphRAG can cross-reference current CISA requirements, state regulations, and recent enforcement actions to validate reporting obligations.",
+            expected_evidence_types=["CISA_Requirements", "State_Breach_Laws", "Notification_Timelines", "Enforcement_Cases"]
+        ),
+        
+        ExampleText(
+            id="environmental-esg-1",
+            title="SEC Climate Disclosure Requirements",
+            text="Our 2024 sustainability report will include Scope 1, 2, and 3 emissions data as required by the SEC's new climate disclosure rules effective March 2024. We've engaged a third-party verifier for our Scope 1 and 2 emissions, with limited assurance planned for Scope 3 emissions starting in 2026 for large accelerated filers.",
+            category="environmental",
+            complexity="intermediate",
+            why_graphrag_better="LLMs often lack the most current SEC climate disclosure rules and implementation timelines. GraphRAG can access the latest SEC guidance, implementation schedules, and industry best practices to verify compliance requirements.",
+            expected_evidence_types=["SEC_Climate_Rules", "Implementation_Schedules", "Verification_Requirements", "Industry_Guidance"]
+        ),
+        
+        ExampleText(
+            id="banking-basel-1",
+            title="Basel III Capital Requirements Implementation",
+            text="Our bank has maintained a Common Equity Tier 1 (CET1) ratio of 12.5%, well above the Basel III minimum requirement of 4.5% plus the capital conservation buffer of 2.5%. We've also met the Liquidity Coverage Ratio (LCR) requirement of 100% and are preparing for the Net Stable Funding Ratio (NSFR) implementation scheduled for January 2025.",
+            category="banking",
+            complexity="advanced",
+            why_graphrag_better="LLMs may have outdated Basel III implementation timelines and requirements. GraphRAG can access current regulatory guidance, implementation schedules, and supervisory expectations to validate capital adequacy claims.",
+            expected_evidence_types=["Basel_III_Standards", "Regulatory_Guidance", "Implementation_Timelines", "Supervisory_Expectations"]
+        ),
+        
+        ExampleText(
+            id="simple-factual-1",
+            title="Basic Company Information (Baseline Test)",
+            text="Apple Inc. was founded in 1976 by Steve Jobs, Steve Wozniak, and Ronald Wayne. The company is headquartered in Cupertino, California, and is currently led by CEO Tim Cook.",
+            category="basic_facts",
+            complexity="basic",
+            why_graphrag_better="This is a baseline test - both LLM and GraphRAG should handle this well. Demonstrates that GraphRAG maintains accuracy on simple facts while excelling on complex compliance queries.",
+            expected_evidence_types=["Public_Records", "Company_Filings", "News_Sources"]
+        )
+    ]
+    
+    categories = list(set(example.category for example in examples))
+    
+    return ExampleTextsResponse(
+        examples=examples,
+        total_count=len(examples),
+        categories=categories,
+        description="Curated example texts designed to showcase GraphRAG's superior fact-checking capabilities in compliance, regulatory, and complex domain-specific scenarios where knowledge graphs provide significant advantages over LLM-only approaches."
+    )
+
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -658,6 +771,7 @@ async def root():
         "description": "Enhanced fact-checking using compliance-specific knowledge retrieval",
         "endpoints": {
             "fact_check": "/fact-check-graphrag",
+            "example_texts": "/example-texts",
             "health": "/health",
             "docs": "/docs"
         }
