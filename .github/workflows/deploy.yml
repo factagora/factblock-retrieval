@@ -107,20 +107,39 @@ jobs:
     - name: Setup SSH key
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
-        chmod 600 ~/.ssh/azure_vm_key
         
-        # Debug: Check if IP is set
+        # Debug: Check if secrets are set
         echo "VM IP: ${{ secrets.AZURE_VM_IP }}"
         echo "VM User: ${{ secrets.AZURE_VM_USER }}"
+        echo "SSH Key starts with: $(echo '${{ secrets.AZURE_VM_SSH_KEY }}' | head -c 50)..."
+        
+        # Create SSH key file with proper formatting
+        echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
+        
+        # Fix permissions (important!)
+        chmod 600 ~/.ssh/azure_vm_key
+        chown $(whoami):$(whoami) ~/.ssh/azure_vm_key
+        
+        # Debug: Check key file
+        echo "SSH key file size: $(wc -c < ~/.ssh/azure_vm_key)"
+        echo "SSH key first line: $(head -1 ~/.ssh/azure_vm_key)"
+        echo "SSH key last line: $(tail -1 ~/.ssh/azure_vm_key)"
+        
+        # Test SSH key format
+        ssh-keygen -l -f ~/.ssh/azure_vm_key || echo "SSH key validation failed"
         
         # Add host key to known_hosts
         if [ -n "${{ secrets.AZURE_VM_IP }}" ]; then
           ssh-keyscan -H "${{ secrets.AZURE_VM_IP }}" >> ~/.ssh/known_hosts
+          echo "Host key added to known_hosts"
         else
           echo "Error: AZURE_VM_IP secret not set"
           exit 1
         fi
+        
+        # Test SSH connection
+        echo "Testing SSH connection..."
+        ssh -i ~/.ssh/azure_vm_key -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }} "echo 'SSH connection test successful'"
     
     - name: Deploy to Azure VM
       run: |
