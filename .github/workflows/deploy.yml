@@ -105,6 +105,7 @@ jobs:
     
     - name: Setup SSH key
       run: |
+        mkdir -p ~/.ssh
         echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
         chmod 600 ~/.ssh/azure_vm_key
         ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
@@ -233,6 +234,7 @@ jobs:
         echo "🔄 Initiating rollback..."
         
         # Setup SSH
+        mkdir -p ~/.ssh
         echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
         chmod 600 ~/.ssh/azure_vm_key
         ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
