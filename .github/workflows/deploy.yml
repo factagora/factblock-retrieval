@@ -109,9 +109,26 @@ jobs:
         mkdir -p ~/.ssh
         
         # Debug: Check if secrets are set
-        echo "VM IP: ${{ secrets.AZURE_VM_IP }}"
-        echo "VM User: ${{ secrets.AZURE_VM_USER }}"
+        echo "VM IP: '${{ secrets.AZURE_VM_IP }}'"
+        echo "VM User: '${{ secrets.AZURE_VM_USER }}'"
         echo "SSH Key starts with: $(echo '${{ secrets.AZURE_VM_SSH_KEY }}' | head -c 50)..."
+        
+        # Check if secrets are actually set
+        if [ -z "${{ secrets.AZURE_VM_IP }}" ]; then
+          echo "❌ ERROR: AZURE_VM_IP secret is empty or not set!"
+          echo "Please check GitHub repository Settings → Secrets and variables → Actions"
+          exit 1
+        fi
+        
+        if [ -z "${{ secrets.AZURE_VM_USER }}" ]; then
+          echo "❌ ERROR: AZURE_VM_USER secret is empty or not set!"
+          exit 1
+        fi
+        
+        if [ -z "${{ secrets.AZURE_VM_SSH_KEY }}" ]; then
+          echo "❌ ERROR: AZURE_VM_SSH_KEY secret is empty or not set!"
+          exit 1
+        fi
         
         # Create SSH key file with proper formatting
         echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
