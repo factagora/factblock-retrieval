@@ -118,7 +118,6 @@ jobs:
         
         # Fix permissions (important!)
         chmod 600 ~/.ssh/azure_vm_key
-        chown $(whoami):$(whoami) ~/.ssh/azure_vm_key
         
         # Debug: Check key file
         echo "SSH key file size: $(wc -c < ~/.ssh/azure_vm_key)"
