@@ -1,0 +1,267 @@
+name: Deploy GraphRAG Fact-Check API
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
+  AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      neo4j:
+        image: neo4j:5.14.0
+        env:
+          NEO4J_AUTH: neo4j/testpassword
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p testpassword 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio httpx
+    
+    - name: Wait for Neo4j to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:7474; do sleep 2; done'
+    
+    - name: Run tests
+      env:
+        NEO4J_URI: bolt://localhost:7687
+        NEO4J_USER: neo4j
+        NEO4J_PASSWORD: testpassword
+        AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+        AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+        AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+      run: |
+        # Test API endpoints without actual LLM calls
+        python -c "
+        import sys
+        sys.path.insert(0, 'src')
+        from api.graphrag_fact_check import app
+        from fastapi.testclient import TestClient
+        
+        client = TestClient(app)
+        
+        # Test health endpoint
+        response = client.get('/health')
+        assert response.status_code == 200
+        print('✓ Health check passed')
+        
+        # Test example texts endpoint
+        response = client.get('/example-texts')
+        assert response.status_code == 200
+        data = response.json()
+        assert data['total_count'] > 0
+        assert len(data['examples']) > 0
+        print('✓ Example texts endpoint passed')
+        
+        # Test root endpoint
+        response = client.get('/')
+        assert response.status_code == 200
+        print('✓ Root endpoint passed')
+        
+        print('All tests passed!')
+        "
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup SSH key
+      run: |
+        echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
+        chmod 600 ~/.ssh/azure_vm_key
+        ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
+    
+    - name: Deploy to Azure VM
+      run: |
+        # Create deployment script
+        cat > deploy_script.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "🚀 Starting deployment..."
+        
+        # Navigate to application directory
+        cd /opt/factblock-retrieval
+        
+        # Backup current deployment
+        sudo cp -r src src_backup_$(date +%Y%m%d_%H%M%S) || true
+        
+        # Pull latest changes
+        sudo git fetch origin
+        sudo git reset --hard origin/main
+        
+        # Update environment if needed
+        if [ ! -f .env ]; then
+          sudo cp .env.production .env
+          echo "⚠️  Please configure .env file with actual credentials"
+        fi
+        
+        # Build and restart services
+        echo "🔄 Rebuilding and restarting services..."
+        sudo docker-compose build --no-cache api
+        sudo docker-compose up -d
+        
+        # Wait for services to be ready
+        echo "⏳ Waiting for services to be ready..."
+        sleep 30
+        
+        # Health check
+        echo "🏥 Running health checks..."
+        
+        # Check Neo4j
+        if curl -f http://localhost:7474 >/dev/null 2>&1; then
+          echo "✅ Neo4j is healthy"
+        else
+          echo "❌ Neo4j health check failed"
+          exit 1
+        fi
+        
+        # Check API
+        if curl -f http://localhost:8001/health >/dev/null 2>&1; then
+          echo "✅ API is healthy"
+        else
+          echo "❌ API health check failed"
+          exit 1
+        fi
+        
+        # Test example texts endpoint
+        if curl -f http://localhost:8001/example-texts >/dev/null 2>&1; then
+          echo "✅ Example texts endpoint is working"
+        else
+          echo "❌ Example texts endpoint failed"
+          exit 1
+        fi
+        
+        echo "🎉 Deployment completed successfully!"
+        
+        # Show deployment info
+        echo "📊 Deployment Status:"
+        sudo docker-compose ps
+        echo ""
+        echo "🌐 Services available at:"
+        echo "  - API: http://$(curl -s ifconfig.me):8001"
+        echo "  - Neo4j: http://$(curl -s ifconfig.me):7474"
+        echo "  - Health: http://$(curl -s ifconfig.me):8001/health"
+        echo "  - Examples: http://$(curl -s ifconfig.me):8001/example-texts"
+        EOF
+        
+        # Upload and execute deployment script
+        scp -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no deploy_script.sh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }}:~/
+        ssh -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }} "chmod +x ~/deploy_script.sh && ~/deploy_script.sh"
+    
+    - name: Post-deployment validation
+      run: |
+        echo "🔍 Running external validation..."
+        
+        # Wait a bit more for external access
+        sleep 10
+        
+        # Test external API access
+        if curl -f http://${{ secrets.AZURE_VM_IP }}:8001/health; then
+          echo "✅ External API access confirmed"
+        else
+          echo "❌ External API access failed"
+          exit 1
+        fi
+        
+        # Test example texts from external
+        if curl -f http://${{ secrets.AZURE_VM_IP }}:8001/example-texts >/dev/null 2>&1; then
+          echo "✅ External example texts access confirmed"
+        else
+          echo "❌ External example texts access failed"
+          exit 1
+        fi
+        
+        echo "🎉 Deployment validation completed!"
+    
+    - name: Notification
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Deployment completed successfully!"
+          echo "🌐 GraphRAG API is live at: http://${{ secrets.AZURE_VM_IP }}:8001"
+        else
+          echo "❌ Deployment failed!"
+        fi
+
+  rollback:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Rollback on failure
+      run: |
+        echo "🔄 Initiating rollback..."
+        
+        # Setup SSH
+        echo "${{ secrets.AZURE_VM_SSH_KEY }}" > ~/.ssh/azure_vm_key
+        chmod 600 ~/.ssh/azure_vm_key
+        ssh-keyscan -H ${{ secrets.AZURE_VM_IP }} >> ~/.ssh/known_hosts
+        
+        # Rollback script
+        cat > rollback_script.sh << 'EOF'
+        #!/bin/bash
+        echo "🔄 Rolling back to previous version..."
+        
+        cd /opt/factblock-retrieval
+        
+        # Find the most recent backup
+        BACKUP_DIR=$(ls -td src_backup_* 2>/dev/null | head -1)
+        
+        if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+          echo "📁 Restoring from backup: $BACKUP_DIR"
+          sudo rm -rf src
+          sudo mv "$BACKUP_DIR" src
+          
+          # Restart services
+          sudo docker-compose restart api
+          
+          echo "✅ Rollback completed"
+        else
+          echo "❌ No backup found for rollback"
+          exit 1
+        fi
+        EOF
+        
+        # Execute rollback
+        scp -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no rollback_script.sh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }}:~/
+        ssh -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_IP }} "chmod +x ~/rollback_script.sh && ~/rollback_script.sh"
