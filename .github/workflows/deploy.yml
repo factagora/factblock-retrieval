@@ -105,6 +105,10 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Setup SSH key
+      env:
+        AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
+        AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
+        AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
       run: |
         mkdir -p ~/.ssh
         
@@ -115,10 +119,6 @@ jobs:
         echo "VM IP starts with: $(echo "$AZURE_VM_IP" | head -c 5)..."
         echo "VM User starts with: $(echo "$AZURE_VM_USER" | head -c 3)..."
         echo "SSH Key starts with: $(echo "$AZURE_VM_SSH_KEY" | head -c 50)..."
-      env:
-        AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
-        AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
-        AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
         
         # Check if secrets are actually set
         if [ -z "$AZURE_VM_IP" ]; then
