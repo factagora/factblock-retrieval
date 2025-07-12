@@ -226,7 +226,7 @@ class SmartGraphRAGRouter:
         
         else:  # BALANCED mode
             # Smart routing based on query analysis
-            if query_type == QueryType.ENTITY_SPECIFIC and confidence > 0.8:
+            if query_type == QueryType.ENTITY_SPECIFIC and confidence >= 0.8:
                 strategy["use_cypher"] = True
                 strategy["reasoning"].append("High confidence entity query → Cypher")
             elif query_type == QueryType.STRUCTURED and confidence > 0.7:

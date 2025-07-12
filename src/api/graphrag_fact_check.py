@@ -666,7 +666,13 @@ async def startup_event():
 async def fact_check_with_graphrag(request: GraphRAGFactCheckRequest):
     """Enhanced fact-checking using GraphRAG compliance retrieval"""
     
-    if not retrieval_module:
+    # Ensure GraphRAG system is available
+    global graphrag_router
+    if not graphrag_router:
+        print("⚠️ GraphRAG router not initialized in API, initializing now...")
+        initialize_retrieval_system()
+    
+    if not graphrag_router and not retrieval_module:
         raise HTTPException(
             status_code=503,
             detail="GraphRAG retrieval system not available. Please check Neo4j connection."
