@@ -217,10 +217,32 @@ jobs:
         echo "💾 Available disk space:"
         df -h /
         
-        # Build and restart services
-        echo "🔄 Rebuilding and restarting services..."
-        sudo docker-compose build --no-cache api
-        sudo docker-compose up -d
+        # Smart build strategy - only rebuild what changed
+        echo "🔄 Smart rebuilding services..."
+        BUILD_START=$(date +%s)
+        
+        # Check if requirements.txt changed (force rebuild if dependencies changed)
+        if ! sudo docker image inspect factblock-retrieval-api:latest >/dev/null 2>&1; then
+          echo "📦 No existing image found - doing full build"
+          sudo docker-compose build api
+        elif git diff HEAD~1 HEAD --name-only | grep -E "(requirements\.txt|Dockerfile)" >/dev/null; then
+          echo "📦 Dependencies changed - rebuilding with fresh packages"
+          sudo docker-compose build --no-cache api
+        else
+          echo "📦 Only code changed - using cached layers"
+          sudo docker-compose build api
+        fi
+        
+        # Only restart containers that need it
+        echo "🔄 Restarting services..."
+        sudo docker-compose up -d --no-recreate
+        
+        # Show build time and what was reused
+        BUILD_END=$(date +%s)
+        BUILD_TIME=$((BUILD_END - BUILD_START))
+        echo "⏱️ Build completed in ${BUILD_TIME} seconds"
+        echo "📊 Neo4j: Reused existing container and data volumes"
+        echo "📊 API: $(if git diff HEAD~1 HEAD --name-only | grep -E "(requirements\.txt|Dockerfile)" >/dev/null; then echo "Full rebuild (dependencies changed)"; else echo "Fast rebuild (cached layers used)"; fi)"
         
         # Clean up unused images after successful deployment
         echo "🧹 Post-deployment cleanup..."
