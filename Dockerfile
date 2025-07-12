@@ -28,8 +28,12 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
+# Create non-root user for security first
+RUN useradd --create-home --shell /bin/bash app
+
 # Copy Python packages from builder stage to app user location
-COPY --from=builder /root/.local /usr/local
+COPY --from=builder /root/.local /home/app/.local
+RUN chown -R app:app /home/app/.local
 
 # Copy application code
 COPY . .
@@ -38,10 +42,12 @@ COPY . .
 COPY wait-for-neo4j.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/wait-for-neo4j.sh
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
+# Set ownership and switch to app user
+RUN chown -R app:app /app
 USER app
+
+# Set PATH to include user's local bin
+ENV PATH="/home/app/.local/bin:$PATH"
 
 # Expose port
 EXPOSE 8001
