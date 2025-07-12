@@ -208,10 +208,23 @@ jobs:
           echo "✅ Environment file created"
         fi
         
+        # Clean up Docker space before build
+        echo "🧹 Cleaning up Docker space..."
+        sudo docker system prune -f || true
+        sudo docker image prune -f || true
+        
+        # Check available space
+        echo "💾 Available disk space:"
+        df -h /
+        
         # Build and restart services
         echo "🔄 Rebuilding and restarting services..."
         sudo docker-compose build --no-cache api
         sudo docker-compose up -d
+        
+        # Clean up unused images after successful deployment
+        echo "🧹 Post-deployment cleanup..."
+        sudo docker image prune -f || true
         
         # Wait for services to be ready
         echo "⏳ Waiting for services to be ready..."

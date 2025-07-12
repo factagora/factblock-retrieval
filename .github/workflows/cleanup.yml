@@ -1,0 +1,111 @@
+name: Weekly Docker Cleanup
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
+  AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Setup SSH key
+      env:
+        AZURE_VM_SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "$AZURE_VM_SSH_KEY" > ~/.ssh/azure_vm_key
+        chmod 600 ~/.ssh/azure_vm_key
+        ssh-keyscan -H "$AZURE_VM_IP" >> ~/.ssh/known_hosts
+    
+    - name: Docker Cleanup on Azure VM
+      run: |
+        cat > cleanup_script.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "🧹 Starting weekly Docker cleanup..."
+        
+        # Show space before cleanup
+        echo "💾 Disk space before cleanup:"
+        df -h /
+        echo ""
+        
+        echo "🐳 Docker usage before cleanup:"
+        sudo docker system df
+        echo ""
+        
+        # Stop non-essential containers (keep running services)
+        echo "⏸️ Stopping old containers (keeping current services)..."
+        
+        # Remove containers that have been stopped for more than 24 hours
+        sudo docker container prune -f --filter "until=24h" || true
+        
+        # Remove unused images (but keep images from last 7 days)
+        echo "🗑️ Removing unused images older than 7 days..."
+        sudo docker image prune -a -f --filter "until=168h" || true
+        
+        # Remove unused networks
+        echo "🌐 Removing unused networks..."
+        sudo docker network prune -f || true
+        
+        # Remove unused volumes (be careful with data)
+        echo "💾 Removing unused volumes..."
+        sudo docker volume prune -f || true
+        
+        # Clean build cache
+        echo "🔨 Cleaning build cache..."
+        sudo docker builder prune -f || true
+        
+        # Show space after cleanup
+        echo ""
+        echo "💾 Disk space after cleanup:"
+        df -h /
+        echo ""
+        
+        echo "🐳 Docker usage after cleanup:"
+        sudo docker system df
+        echo ""
+        
+        # Verify services are still running
+        echo "✅ Verifying services are still running..."
+        cd /opt/factblock-retrieval
+        sudo docker-compose ps
+        
+        # Health check
+        if curl -f http://localhost:8001/health >/dev/null 2>&1; then
+          echo "✅ API is still healthy after cleanup"
+        else
+          echo "⚠️ API health check failed after cleanup - restarting services"
+          sudo docker-compose restart
+          sleep 30
+          if curl -f http://localhost:8001/health >/dev/null 2>&1; then
+            echo "✅ API restored after restart"
+          else
+            echo "❌ API still unhealthy after restart"
+            exit 1
+          fi
+        fi
+        
+        echo "🎉 Weekly cleanup completed successfully!"
+        EOF
+        
+        # Upload and execute cleanup script
+        scp -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no cleanup_script.sh "$AZURE_VM_USER@$AZURE_VM_IP":~/
+        ssh -i ~/.ssh/azure_vm_key -o StrictHostKeyChecking=no "$AZURE_VM_USER@$AZURE_VM_IP" "chmod +x ~/cleanup_script.sh && ~/cleanup_script.sh"
+    
+    - name: Cleanup Summary
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Weekly Docker cleanup completed successfully!"
+        else
+          echo "❌ Weekly Docker cleanup failed!"
+        fi
