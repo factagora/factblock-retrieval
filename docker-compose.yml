@@ -1,6 +1,6 @@
 services:
   neo4j:
-    image: neo4j:5.14.0
+    image: neo4j:5.12.0
     container_name: graphrag-neo4j
     restart: unless-stopped
     ports:
@@ -8,27 +8,14 @@ services:
       - "7687:7687"
     volumes:
       - neo4j_data:/data
-      - neo4j_logs:/logs
-      - neo4j_import:/var/lib/neo4j/import
-      - neo4j_plugins:/plugins
     environment:
       - NEO4J_AUTH=neo4j/password
-      # Reduced memory allocation for Standard_B2ms VM (8GB RAM)
-      - NEO4J_dbms_memory_heap_initial__size=256m
-      - NEO4J_dbms_memory_heap_max__size=1G
-      - NEO4J_dbms_memory_pagecache_size=256m
-      # Enable external connections
+      # Minimal memory settings for Azure VM stability
+      - NEO4J_dbms_memory_heap_initial__size=128m
+      - NEO4J_dbms_memory_heap_max__size=512m
+      - NEO4J_dbms_memory_pagecache_size=128m
+      # Basic configuration only
       - NEO4J_dbms_default_listen_address=0.0.0.0
-      - NEO4J_dbms_connector_bolt_listen_address=0.0.0.0:7687
-      - NEO4J_dbms_connector_http_listen_address=0.0.0.0:7474
-      # Security settings
-      - NEO4J_dbms_security_auth_enabled=true
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:7474 || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 8
-      start_period: 90s
 
   api:
     build: .
@@ -37,8 +24,7 @@ services:
     ports:
       - "8001:8001"
     depends_on:
-      neo4j:
-        condition: service_healthy
+      - neo4j
     environment:
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
@@ -46,17 +32,6 @@ services:
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
-    volumes:
-      - ./src:/app/src:ro
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 15s
-      retries: 5
-      start_period: 60s
 
 volumes:
   neo4j_data:
-  neo4j_logs:
-  neo4j_import:
-  neo4j_plugins:

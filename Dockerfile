@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     gcc \
     g++ \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -19,6 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
+
+# Copy and set permissions for wait script
+COPY wait-for-neo4j.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/wait-for-neo4j.sh
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app \
@@ -32,5 +37,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
-# Start command
-CMD ["uvicorn", "src.api.graphrag_fact_check:app", "--host", "0.0.0.0", "--port", "8001"]
+# Start command with Neo4j wait
+CMD ["/usr/local/bin/wait-for-neo4j.sh", "neo4j", "7687", "uvicorn", "src.api.graphrag_fact_check:app", "--host", "0.0.0.0", "--port", "8001"]
