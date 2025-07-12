@@ -74,10 +74,11 @@ class SmartGraphRAGRouter:
         """Setup patterns for query classification"""
         self.patterns = {
             QueryType.ENTITY_SPECIFIC: [
-                r'\b(OPEC|오펙|Tesla|Apple|Microsoft|Google|Amazon|Fed|Federal Reserve|연준|현대자동차|반도체)\b',
+                r'\b(OPEC|Tesla|Apple|Microsoft|Google|Amazon|Fed|Federal Reserve)\b',
+                r'\b연준\b',  # Korean Fed
                 r'\babout\s+[A-Z][a-z]+\b',
                 r'\bmentioning?\s+[A-Z][a-z]+\b',
-                r'(감산|원유|배럴|산유국|항공사|연료비|금리)',  # Korean terms
+                r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b',  # Proper nouns pattern
             ],
             
             QueryType.STRUCTURED: [
@@ -105,12 +106,11 @@ class SmartGraphRAGRouter:
             ]
         }
         
-        # Known entities for quick recognition
+        # Known entities for quick recognition - keep minimal and general
         self.known_entities = {
-            'opec', '오펙', 'tesla', 'apple', 'microsoft', 'google', 'amazon', 
+            'opec', 'tesla', 'apple', 'microsoft', 'google', 'amazon', 
             'fed', 'federal reserve', '연준', '중앙은행', 'nvidia',
-            'meta', 'facebook', 'bitcoin', 'ethereum', '현대자동차',
-            '감산', '원유', '배럴', '산유국', '항공사', '연료비', '금리', '반도체'
+            'meta', 'facebook', 'bitcoin', 'ethereum'
         }
         
         # Investment domain terms

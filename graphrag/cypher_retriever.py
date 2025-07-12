@@ -86,20 +86,6 @@ class TextToCypherRetriever:
                 """
             },
             
-            # Korean entity search patterns
-            {
-                "pattern": r"(OPEC|오펙|산유국|감산|원유|배럴)",
-                "type": "korean_entity_search",
-                "template": """
-                MATCH (f:FactBlock)
-                WHERE toLower(f.claim) CONTAINS toLower($entity)
-                   OR toLower(f.evidence) CONTAINS toLower($entity)
-                   OR toLower(f.summary) CONTAINS toLower($entity)
-                RETURN f
-                ORDER BY f.confidence_score DESC
-                LIMIT $limit
-                """
-            },
             
             # Sector-based patterns
             {
@@ -223,9 +209,6 @@ class TextToCypherRetriever:
                     mapped_entity = self.entity_mappings.get(entity, entity)
                     params["entity"] = mapped_entity
                 
-                elif pattern_info["type"] == "korean_entity_search":
-                    entity = match.group(1).strip()
-                    params["entity"] = entity
                 
                 elif pattern_info["type"] == "sector_search":
                     sector = match.group(1).strip()
@@ -261,39 +244,32 @@ class TextToCypherRetriever:
                     "original_query": query
                 }
         
-        # Fallback: enhanced general text search with multiple search strategies
-        # Try to extract key terms from the query for better matching
-        key_terms = []
+        # Fallback: general text search that works for any language
+        # Extract meaningful words from the query for better matching
         
-        # Extract Korean keywords
-        korean_keywords = ["OPEC", "오펙", "감산", "원유", "배럴", "산유국", "항공사", "연료비", "연준", "금리", "현대자동차", "반도체"]
-        for keyword in korean_keywords:
-            if keyword in query:
-                key_terms.append(keyword)
+        # Split query into words, removing common stop words and short words
+        words = re.findall(r'\b\w{2,}\b', query)  # Extract words with 2+ characters
+        stop_words = {'은', '는', '이', '가', '을', '를', '에', '의', 'and', 'or', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for'}
+        meaningful_words = [word for word in words if word.lower() not in stop_words]
         
-        # If we found key terms, search for them specifically
-        if key_terms:
-            search_term = key_terms[0]  # Use the first found key term
-        else:
-            search_term = query
-        
+        # Use the full query for primary search, and individual words for secondary search
         return {
-            "type": "fallback_search",
+            "type": "fallback_search", 
             "cypher_template": """
             MATCH (f:FactBlock)
             WHERE toLower(f.claim) CONTAINS toLower($query)
                OR toLower(f.evidence) CONTAINS toLower($query)
                OR toLower(f.summary) CONTAINS toLower($query)
-               OR ($search_term IS NOT NULL AND (
-                   toLower(f.claim) CONTAINS toLower($search_term)
-                   OR toLower(f.evidence) CONTAINS toLower($search_term)
-                   OR toLower(f.summary) CONTAINS toLower($search_term)
+               OR ANY(word IN $meaningful_words WHERE (
+                   toLower(f.claim) CONTAINS toLower(word)
+                   OR toLower(f.evidence) CONTAINS toLower(word)
+                   OR toLower(f.summary) CONTAINS toLower(word)
                ))
             RETURN f
             ORDER BY f.confidence_score DESC
             LIMIT $limit
             """,
-            "parameters": {"query": query, "search_term": search_term, "limit": 10},
+            "parameters": {"query": query, "meaningful_words": meaningful_words, "limit": 10},
             "original_query": query
         }
     
