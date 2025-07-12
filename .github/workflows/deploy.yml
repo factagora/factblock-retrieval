@@ -213,10 +213,13 @@ jobs:
           echo "✅ Environment file created"
         fi
         
-        # Clean up Docker space before build
-        echo "🧹 Cleaning up Docker space..."
-        sudo docker system prune -f || true
+        # Clean up Docker space before build (PRESERVE VOLUMES!)
+        echo "🧹 Cleaning up Docker space (preserving volumes)..."
+        sudo docker container prune -f || true
         sudo docker image prune -f || true
+        sudo docker network prune -f || true
+        # NEVER prune volumes to preserve Neo4j data
+        echo "⚠️  Skipping volume cleanup to preserve Neo4j data"
         
         # Check available space
         echo "💾 Available disk space:"
@@ -252,6 +255,14 @@ jobs:
         # Clean up unused images after successful deployment
         echo "🧹 Post-deployment cleanup..."
         sudo docker image prune -f || true
+        
+        # Verify data volumes before proceeding
+        echo "🔍 Verifying Neo4j data volume exists..."
+        if sudo docker volume inspect neo4j_data >/dev/null 2>&1; then
+          echo "✅ Neo4j data volume found"
+        else
+          echo "⚠️  WARNING: Neo4j data volume missing - database will be empty!"
+        fi
         
         # Wait for services to be ready
         echo "⏳ Waiting for services to be ready..."
@@ -292,6 +303,18 @@ jobs:
           echo "Example texts not ready, waiting... ($i/30)"
           sleep 5
         done
+        
+        # Verify Neo4j has data after deployment
+        echo "🔍 Verifying Neo4j database has data..."
+        FACTBLOCK_COUNT=$(sudo docker exec graphrag-neo4j cypher-shell -u neo4j -p password "MATCH (f:FactBlock) RETURN count(f) as count" --format plain 2>/dev/null | tail -1 || echo "0")
+        echo "FactBlocks found: $FACTBLOCK_COUNT"
+        
+        if [ "$FACTBLOCK_COUNT" -gt "0" ]; then
+          echo "✅ Neo4j database has data ($FACTBLOCK_COUNT FactBlocks)"
+        else
+          echo "⚠️  WARNING: Neo4j database appears to be empty!"
+          echo "🔧 This may cause fact-checking to return no results"
+        fi
         
         echo "🎉 Deployment completed successfully!"
         
