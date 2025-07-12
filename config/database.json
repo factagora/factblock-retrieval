@@ -1,0 +1,19 @@
+{
+  "neo4j": {
+    "uri": "bolt://localhost:7687",
+    "user": "neo4j",
+    "password": "password",
+    "database": "factblock",
+    "pool_settings": {
+      "max_connection_lifetime": 1000,
+      "max_connection_pool_size": 50,
+      "connection_acquisition_timeout": 60
+    }
+  },
+  "batch_settings": {
+    "batch_size": 1000,
+    "max_concurrent_batches": 5,
+    "retry_attempts": 3,
+    "retry_delay": 5
+  }
+}

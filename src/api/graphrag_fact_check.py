@@ -27,6 +27,14 @@ sys.path.insert(0, project_root)
 from src.retrieval import RetrievalModule
 from src.config import load_config
 
+# Import GraphRAG components
+from graphrag.smart_router import SmartGraphRAGRouter, PerformanceMode, QueryType
+from graphrag.vector_retriever import GraphVectorRetriever
+from graphrag.cypher_retriever import TextToCypherRetriever
+
+# Import Enhanced GraphRAG components
+from ..graphrag.enhanced_graphrag import EnhancedGraphRAG, create_enhanced_fact_check_endpoint
+
 app = FastAPI(title="GraphRAG Fact Check API", version="1.0.0")
 
 # Add CORS middleware
@@ -79,17 +87,30 @@ def initialize_openai_client():
             
             # Try to create the client with more specific error handling
             try:
+                # Initialize Azure OpenAI client with correct parameters
                 openai_client = AzureOpenAI(
                     api_key=azure_api_key,
                     api_version="2024-02-15-preview",
-                    azure_endpoint=azure_endpoint
+                    azure_endpoint=azure_endpoint,
+                    timeout=30.0  # Add timeout parameter
                 )
                 use_azure = True
                 print("✓ Successfully initialized Azure OpenAI client")
                 
                 # Test the client with a simple call
-                print("Testing Azure OpenAI client with simple call...")
-                # Note: We won't actually make a call during initialization to avoid costs
+                print("Testing Azure OpenAI client connectivity...")
+                try:
+                    # Simple test to verify the client works
+                    response = openai_client.chat.completions.create(
+                        model=azure_deployment,
+                        messages=[{"role": "user", "content": "Hello"}],
+                        max_tokens=5,
+                        temperature=0
+                    )
+                    print("✓ Azure OpenAI client test successful")
+                except Exception as test_error:
+                    print(f"⚠️ Azure OpenAI client test failed: {test_error}")
+                    # Client created but test failed - might still work for actual requests
                 
             except ImportError as e:
                 print(f"❌ Import error with AzureOpenAI: {e}")
@@ -127,8 +148,10 @@ def initialize_openai_client():
     
     print(f"Final state: openai_client = {openai_client is not None}, use_azure = {use_azure}")
 
-# Global retrieval module - initialized on startup
+# Global retrieval modules - initialized on startup
 retrieval_module = None
+graphrag_router = None
+enhanced_graphrag = None
 
 class GraphRAGFactCheckInstance(BaseModel):
     label: str = Field(..., description="Classification label")
@@ -164,16 +187,40 @@ class GraphRAGFactCheckResponse(BaseModel):
 
 def initialize_retrieval_system():
     """Initialize the GraphRAG retrieval system"""
-    global retrieval_module
+    global retrieval_module, graphrag_router, enhanced_graphrag
     
     # Set environment variables
     if not os.getenv('NEO4J_PASSWORD'):
         os.environ['NEO4J_PASSWORD'] = 'password'
     
     try:
+        # Initialize basic retrieval module
         config = load_config()
         retrieval_module = RetrievalModule('graphrag')
         retrieval_module.initialize(config.to_dict())
+        
+        # Initialize advanced GraphRAG router
+        graphrag_router = SmartGraphRAGRouter(performance_mode=PerformanceMode.BALANCED)
+        
+        # Initialize Enhanced GraphRAG system
+        neo4j_config = config.to_dict().get('neo4j', {})
+        enhanced_graphrag = EnhancedGraphRAG(
+            neo4j_uri=neo4j_config.get('uri', 'bolt://localhost:7687'),
+            neo4j_user=neo4j_config.get('user', 'neo4j'),
+            neo4j_password=neo4j_config.get('password', 'password'),
+            enable_parallel_processing=True
+        )
+        
+        # Initialize GraphRAG components
+        print("Initializing GraphRAG components...")
+        try:
+            # Router initializes itself in constructor
+            print("✅ GraphRAG router initialized successfully")
+            print("✅ Enhanced GraphRAG system initialized successfully")
+        except Exception as e:
+            print(f"⚠️ GraphRAG router initialization failed: {e}")
+            # Continue with basic retrieval module
+        
         return True
     except Exception as e:
         print(f"Failed to initialize retrieval system: {e}")
@@ -217,7 +264,83 @@ def extract_claims_from_text(text: str) -> List[Dict[str, Any]]:
     return claims
 
 def retrieve_compliance_evidence(claim_text: str, compliance_focus: Optional[List[str]] = None, max_evidence: int = 5) -> List[Dict[str, Any]]:
-    """Retrieve relevant compliance evidence for a claim"""
+    """Retrieve relevant compliance evidence for a claim using advanced GraphRAG"""
+    
+    # Try advanced GraphRAG router first
+    if graphrag_router:
+        try:
+            print(f"Using advanced GraphRAG router for query: {claim_text[:50]}...")
+            
+            # Prepare context for smart routing
+            context = {
+                'compliance_focus': compliance_focus,
+                'max_results': max_evidence
+            }
+            
+            # Let the router decide the best approach  
+            search_results = graphrag_router.search(
+                query=claim_text,
+                max_results=max_evidence
+            )
+            
+            evidence = []
+            
+            # Process GraphRAG router results
+            if search_results and search_results.get('combined_results'):
+                for result in search_results['combined_results']:
+                    evidence.append({
+                        'content': result.get('content', ''),
+                        'source_type': result.get('source_type', 'GraphRAG'),
+                        'score': result.get('score', 0.0),
+                        'metadata': result.get('metadata', {}),
+                        'category': result.get('metadata', {}).get('category', 'unknown'),
+                        'retrieval_method': result.get('retrieval_method', 'hybrid')
+                    })
+            
+            # If no combined results, check individual vector and cypher results
+            if not evidence:
+                # Process vector results
+                if search_results and search_results.get('vector_results'):
+                    for result in search_results['vector_results']:
+                        evidence.append({
+                            'content': result.get('content', ''),
+                            'source_type': result.get('source_type', 'Vector'),
+                            'score': result.get('score', 0.0),
+                            'metadata': result.get('metadata', {}),
+                            'category': result.get('metadata', {}).get('category', 'unknown'),
+                            'retrieval_method': 'vector'
+                        })
+                
+                # Process cypher results
+                if search_results and search_results.get('cypher_results'):
+                    cypher_data = search_results['cypher_results']
+                    if cypher_data.get('results'):
+                        for result in cypher_data['results']:
+                            # Extract FactBlock data from Neo4j result
+                            factblock = result.get('f', {}) if 'f' in result else result
+                            evidence.append({
+                                'content': factblock.get('claim', '') + ' | ' + factblock.get('evidence', ''),
+                                'source_type': factblock.get('source_type', 'FactBlock'),
+                                'score': factblock.get('confidence_score', 0.0),
+                                'metadata': {
+                                    'verdict': factblock.get('verdict', 'unknown'),
+                                    'category': factblock.get('affected_sectors', ['unknown'])[0] if factblock.get('affected_sectors') else 'unknown',
+                                    'investment_themes': factblock.get('investment_themes', []),
+                                    'language': factblock.get('language', 'unknown'),
+                                    'publication': factblock.get('publication', 'unknown'),
+                                    'author': factblock.get('author', 'unknown')
+                                },
+                                'category': factblock.get('affected_sectors', ['unknown'])[0] if factblock.get('affected_sectors') else 'unknown',
+                                'retrieval_method': 'cypher'
+                            })
+            
+            print(f"✅ GraphRAG router returned {len(evidence)} results")
+            return evidence
+            
+        except Exception as e:
+            print(f"⚠️ GraphRAG router failed, falling back to basic retrieval: {e}")
+    
+    # Fallback to basic retrieval module
     if not retrieval_module:
         return []
     
@@ -252,9 +375,11 @@ def retrieve_compliance_evidence(claim_text: str, compliance_focus: Optional[Lis
                 'source_type': result.source_type,
                 'score': result.score,
                 'metadata': result.metadata,
-                'category': result.metadata.get('category', 'unknown')
+                'category': result.metadata.get('category', 'unknown'),
+                'retrieval_method': 'basic'
             })
         
+        print(f"✅ Basic retrieval returned {len(evidence)} results")
         return evidence
         
     except Exception as e:
@@ -608,6 +733,135 @@ async def fact_check_with_graphrag(request: GraphRAGFactCheckRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
+# Enhanced Fact-Check Request/Response Models
+class EnhancedFactCheckRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="Text to fact-check")
+    max_evidence: int = Field(5, ge=1, le=20, description="Maximum evidence documents to retrieve")
+    max_relationship_depth: int = Field(3, ge=1, le=5, description="Maximum relationship traversal depth")
+    min_confidence_threshold: float = Field(0.6, ge=0.0, le=1.0, description="Minimum confidence threshold")
+    enable_regulatory_cascades: bool = Field(True, description="Enable regulatory cascade detection")
+
+class EnhancedFactCheckResponse(BaseModel):
+    claim: str
+    
+    # Traditional RAG results
+    vector_verdict: str
+    vector_confidence: float
+    vector_evidence: List[Dict]
+    
+    # Relationship-aware results  
+    relationship_verdict: str
+    relationship_confidence: float
+    relationship_evidence: List[Dict]
+    regulatory_cascades: List[Dict]
+    
+    # Combined results
+    final_verdict: str
+    final_confidence: float
+    explanation: str
+    unique_relationship_insights: List[str]
+    
+    # Performance metrics
+    vector_time_ms: float
+    relationship_time_ms: float
+    total_time_ms: float
+    timestamp: str
+
+@app.post("/fact-check-enhanced", response_model=EnhancedFactCheckResponse)
+async def fact_check_enhanced(request: EnhancedFactCheckRequest):
+    """Enhanced fact-checking using both vector similarity and relationship analysis"""
+    
+    if not enhanced_graphrag:
+        raise HTTPException(
+            status_code=503,
+            detail="Enhanced GraphRAG system not available. Please check initialization."
+        )
+    
+    try:
+        result = enhanced_graphrag.fact_check_enhanced(
+            claim=request.text,
+            max_evidence=request.max_evidence,
+            max_relationship_depth=request.max_relationship_depth,
+            min_confidence_threshold=request.min_confidence_threshold,
+            enable_regulatory_cascades=request.enable_regulatory_cascades
+        )
+        
+        # Convert dataclass to response model
+        response_dict = {
+            'claim': result.claim,
+            'vector_verdict': result.vector_verdict,
+            'vector_confidence': result.vector_confidence,
+            'vector_evidence': result.vector_evidence,
+            'relationship_verdict': result.relationship_verdict,
+            'relationship_confidence': result.relationship_confidence,
+            'relationship_evidence': result.relationship_evidence,
+            'regulatory_cascades': result.regulatory_cascades,
+            'final_verdict': result.final_verdict,
+            'final_confidence': result.final_confidence,
+            'explanation': result.explanation,
+            'unique_relationship_insights': result.unique_relationship_insights,
+            'vector_time_ms': result.vector_time_ms,
+            'relationship_time_ms': result.relationship_time_ms,
+            'total_time_ms': result.total_time_ms,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return EnhancedFactCheckResponse(**response_dict)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Enhanced fact-check failed: {str(e)}")
+
+@app.post("/regulatory-cascade-demo")
+async def regulatory_cascade_demo():
+    """Demonstrate regulatory cascade detection with our example data"""
+    
+    if not enhanced_graphrag:
+        raise HTTPException(
+            status_code=503,
+            detail="Enhanced GraphRAG system not available."
+        )
+    
+    # Sample regulatory cascade examples from our CSV
+    demo_claims = [
+        "EU 차량 온실가스 배출 기준 강화로 자동차 회사들이 전기차 투자를 늘렸다",
+        "미국 은행 스트레스 테스트 기준 변경으로 지역은행들이 대출 심사를 강화했다",
+        "일본 개인정보보호법 개정으로 인터넷 기업들이 데이터 처리 시스템을 전면 개편했다"
+    ]
+    
+    results = []
+    
+    for claim in demo_claims:
+        try:
+            result = enhanced_graphrag.fact_check_enhanced(
+                claim=claim,
+                max_evidence=3,
+                max_relationship_depth=3,
+                min_confidence_threshold=0.5,
+                enable_regulatory_cascades=True
+            )
+            
+            results.append({
+                'claim': claim,
+                'regulatory_cascades_found': len(result.regulatory_cascades),
+                'relationship_insights': result.unique_relationship_insights,
+                'final_verdict': result.final_verdict,
+                'final_confidence': result.final_confidence,
+                'cascades': result.regulatory_cascades[:3]  # Top 3 cascades
+            })
+            
+        except Exception as e:
+            results.append({
+                'claim': claim,
+                'error': str(e)
+            })
+    
+    return {
+        'demo_title': 'Regulatory Cascade Detection Demo',
+        'description': 'Shows how relationship-aware fact-checking detects regulatory cascades that vector embeddings cannot capture',
+        'results': results,
+        'explanation': 'These examples demonstrate regulation → compliance → business impact chains that are invisible to traditional vector similarity approaches'
+    }
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -615,10 +869,35 @@ async def health_check():
         "status": "healthy",
         "service": "graphrag-fact-check-api",
         "retrieval_system": "available" if retrieval_module else "unavailable",
+        "graphrag_router": "available" if graphrag_router else "unavailable",
+        "enhanced_graphrag": "available" if enhanced_graphrag else "unavailable",
         "ai_provider": "azure-openai" if use_azure else "openai",
         "llm_client": "available" if openai_client else "unavailable",
-        "features": ["hybrid-fact-checking", "compliance-evidence", "graphrag-retrieval", "llm-analysis"],
-        "fact_check_method": "hybrid_graphrag_llm"
+        "features": [
+            "hybrid-fact-checking", 
+            "compliance-evidence", 
+            "graphrag-retrieval", 
+            "llm-analysis", 
+            "smart-routing",
+            "relationship-aware-fact-checking",
+            "regulatory-cascade-detection",
+            "multi-hop-traversal"
+        ],
+        "fact_check_method": "enhanced_hybrid_graphrag",
+        "graphrag_capabilities": [
+            "vector-similarity", 
+            "cypher-queries", 
+            "smart-routing", 
+            "hybrid-retrieval",
+            "relationship-traversal",
+            "regulatory-cascades",
+            "contradiction-detection"
+        ] if enhanced_graphrag else ["basic-retrieval"],
+        "endpoints": {
+            "traditional": "/fact-check-graphrag",
+            "enhanced": "/fact-check-enhanced", 
+            "demo": "/regulatory-cascade-demo"
+        }
     }
 
 @app.get("/debug")
@@ -672,84 +951,85 @@ async def get_example_texts():
     """
     
     examples = [
+        # Examples based on actual factblock-collection data
         ExampleText(
-            id="gdpr-retention-1",
-            title="GDPR Data Retention Requirements",
-            text="Under GDPR Article 5(1)(e), personal data must be kept in a form which permits identification of data subjects for no longer than is necessary for the purposes for which the personal data are processed. The regulation specifically requires deletion after 72 hours for breach notifications and 30 days for standard user data deletion requests.",
-            category="data_privacy",
+            id="fed-rate-policy-1",
+            title="Federal Reserve Interest Rate Policy",
+            text="The Federal Reserve raised interest rates by 25 basis points in March 2024, bringing the federal funds rate to 5.25-5.50%. This decision was driven by persistent inflation concerns and signals the Fed's commitment to achieving its 2% inflation target. The rate increase is expected to impact mortgage rates, with 30-year fixed mortgages potentially rising to 7.5% by year-end.",
+            category="financial",
             complexity="intermediate",
-            why_graphrag_better="LLMs often confuse GDPR timelines and mix up different requirements. GraphRAG can cross-reference specific GDPR articles, enforcement cases, and regulatory guidance to verify exact timeframes and contexts.",
-            expected_evidence_types=["GDPR_Article", "DPA_Guidance", "Court_Cases", "Enforcement_Actions"]
+            why_graphrag_better="LLMs often have outdated Fed policy information and may confuse rate targets with actual rates. GraphRAG can access current FOMC minutes, Fed statements, and real-time economic data to verify policy decisions and their implications.",
+            expected_evidence_types=["FOMC_Minutes", "Fed_Statements", "Economic_Data", "Rate_Analysis"]
         ),
         
         ExampleText(
-            id="soc2-controls-1",
-            title="SOC 2 Type II Control Implementation",
-            text="Our company has implemented SOC 2 Type II controls including CC6.1 for logical access controls, which requires multi-factor authentication for all privileged users. According to our assessment, we achieved 99.8% uptime compliance and passed all 147 control points with zero exceptions, meeting the AICPA standards for security and availability.",
-            category="compliance_audit",
+            id="nvidia-ai-growth-1",
+            title="NVIDIA AI Market Position",
+            text="NVIDIA's data center revenue reached $47.5 billion in fiscal 2024, representing a 217% year-over-year growth driven by AI and machine learning demand. The company's H100 GPU chips are powering major AI infrastructure deployments at Microsoft, Google, and Meta, with order backlogs extending into 2025. NVIDIA now captures approximately 80% of the AI chip market share.",
+            category="technology",
             complexity="advanced",
-            why_graphrag_better="LLMs lack access to current AICPA standards, specific control mappings, and industry benchmarks. GraphRAG can validate against actual SOC 2 frameworks, compare to industry standards, and check if the control numbers and requirements are accurate.",
-            expected_evidence_types=["AICPA_Standards", "SOC2_Framework", "Control_Mappings", "Industry_Benchmarks"]
+            why_graphrag_better="LLMs may have outdated financial data and market share information. GraphRAG can access recent earnings reports, market analysis, and competitive intelligence to verify specific revenue figures and market positioning claims.",
+            expected_evidence_types=["Earnings_Reports", "Market_Analysis", "Competitive_Intelligence", "Industry_Reports"]
         ),
         
         ExampleText(
-            id="financial-reporting-1",
-            title="SEC Financial Disclosure Requirements",
-            text="Under Section 404 of the Sarbanes-Oxley Act, our quarterly 10-Q filing reported internal control deficiencies that were remediated within the required 90-day window. The company's ICFR assessment showed material weaknesses in revenue recognition controls, specifically related to ASC 606 implementation for our SaaS subscription model.",
+            id="banking-sector-impact-1",
+            title="Banking Sector Interest Rate Impact",
+            text="Rising interest rates have improved net interest margins for regional banks, with the KBW Regional Banking Index gaining 15% following the Fed's rate decisions. Banks like PNC Financial and Fifth Third Bancorp reported 40 basis point improvements in their net interest margins. However, commercial real estate loan portfolios remain under pressure with default rates rising to 3.2%.",
             category="financial",
             complexity="advanced",
-            why_graphrag_better="LLMs often have outdated information about SEC requirements and accounting standards. GraphRAG can access current SEC guidance, recent enforcement actions, and specific ASC 606 implementation requirements to validate compliance claims.",
-            expected_evidence_types=["SEC_Rules", "SOX_Requirements", "ASC_606_Standards", "Enforcement_Actions"]
+            why_graphrag_better="LLMs lack real-time banking sector data and may have outdated default rates. GraphRAG can access current banking earnings, regulatory reports, and commercial real estate market data to verify specific performance metrics.",
+            expected_evidence_types=["Banking_Earnings", "Regulatory_Reports", "CRE_Market_Data", "Industry_Analysis"]
         ),
         
         ExampleText(
-            id="pharmaceutical-fda-1",
-            title="FDA Drug Approval Process Timeline",
-            text="Our Phase III clinical trial for the new diabetes medication has enrolled 2,847 patients across 45 sites, exceeding the FDA's minimum requirement of 1,500 patients for Type 2 diabetes drugs. The trial is expected to complete in Q2 2024, with NDA submission planned for Q3 2024, targeting approval by end of 2024 based on FDA's 6-month priority review timeline.",
-            category="pharmaceutical",
+            id="google-ai-investment-1",
+            title="Google AI Infrastructure Investment",
+            text="Google announced a $20 billion investment in AI infrastructure for 2024, including new data centers in Virginia and Texas. The company's Cloud division revenue grew 35% year-over-year, reaching $9.5 billion in Q4 2023, driven by AI services adoption. Google's Bard AI service has reached 180 million active users, competing directly with OpenAI's ChatGPT.",
+            category="technology",
             complexity="intermediate",
-            why_graphrag_better="LLMs may not have current FDA guidance on trial requirements and review timelines. GraphRAG can access recent FDA guidance documents, approval statistics, and regulatory precedents to verify requirements and realistic timelines.",
-            expected_evidence_types=["FDA_Guidance", "Clinical_Trial_Requirements", "Approval_Statistics", "Review_Timelines"]
+            why_graphrag_better="LLMs may have outdated Google financial data and AI service metrics. GraphRAG can access recent earnings reports, cloud market analysis, and AI adoption statistics to verify investment amounts and user growth claims.",
+            expected_evidence_types=["Google_Earnings", "Cloud_Market_Data", "AI_Adoption_Stats", "Investment_Analysis"]
         ),
         
         ExampleText(
-            id="cybersecurity-breach-1",
-            title="CISA Cybersecurity Incident Reporting",
-            text="Following the ransomware attack on our infrastructure, we reported the incident to CISA within the required 72-hour window under the new Cyber Incident Reporting for Critical Infrastructure Act. The attack affected our customer database containing 50,000 records, triggering additional state notification requirements in California, New York, and Texas within 3 business days.",
-            category="cybersecurity",
-            complexity="advanced",
-            why_graphrag_better="LLMs may not have the latest cybersecurity reporting requirements and state-specific breach notification laws. GraphRAG can cross-reference current CISA requirements, state regulations, and recent enforcement actions to validate reporting obligations.",
-            expected_evidence_types=["CISA_Requirements", "State_Breach_Laws", "Notification_Timelines", "Enforcement_Cases"]
-        ),
-        
-        ExampleText(
-            id="environmental-esg-1",
-            title="SEC Climate Disclosure Requirements",
-            text="Our 2024 sustainability report will include Scope 1, 2, and 3 emissions data as required by the SEC's new climate disclosure rules effective March 2024. We've engaged a third-party verifier for our Scope 1 and 2 emissions, with limited assurance planned for Scope 3 emissions starting in 2026 for large accelerated filers.",
+            id="renewable-energy-policy-1",
+            title="Renewable Energy Tax Credits",
+            text="The Inflation Reduction Act's renewable energy tax credits have driven $110 billion in clean energy investments since enactment. Solar installations increased by 52% in 2023, with utility-scale projects accounting for 65% of new capacity. The Investment Tax Credit (ITC) for solar projects remains at 30% through 2026, providing strong incentives for continued deployment.",
             category="environmental",
             complexity="intermediate",
-            why_graphrag_better="LLMs often lack the most current SEC climate disclosure rules and implementation timelines. GraphRAG can access the latest SEC guidance, implementation schedules, and industry best practices to verify compliance requirements.",
-            expected_evidence_types=["SEC_Climate_Rules", "Implementation_Schedules", "Verification_Requirements", "Industry_Guidance"]
+            why_graphrag_better="LLMs may have outdated renewable energy statistics and tax credit information. GraphRAG can access current energy deployment data, policy documents, and investment tracking to verify specific growth rates and incentive levels.",
+            expected_evidence_types=["Energy_Deployment_Data", "Policy_Documents", "Investment_Tracking", "Tax_Credit_Analysis"]
         ),
         
         ExampleText(
-            id="banking-basel-1",
-            title="Basel III Capital Requirements Implementation",
-            text="Our bank has maintained a Common Equity Tier 1 (CET1) ratio of 12.5%, well above the Basel III minimum requirement of 4.5% plus the capital conservation buffer of 2.5%. We've also met the Liquidity Coverage Ratio (LCR) requirement of 100% and are preparing for the Net Stable Funding Ratio (NSFR) implementation scheduled for January 2025.",
-            category="banking",
+            id="supply-chain-disruption-1",
+            title="Semiconductor Supply Chain Recovery",
+            text="Global semiconductor lead times have improved to 24 weeks in Q1 2024, down from the peak of 32 weeks in 2022. Taiwan Semiconductor Manufacturing Company (TSMC) increased production capacity by 20% with new facilities in Arizona and Japan. However, automotive chip shortages persist, with Ford and GM reporting continued production delays.",
+            category="technology",
             complexity="advanced",
-            why_graphrag_better="LLMs may have outdated Basel III implementation timelines and requirements. GraphRAG can access current regulatory guidance, implementation schedules, and supervisory expectations to validate capital adequacy claims.",
-            expected_evidence_types=["Basel_III_Standards", "Regulatory_Guidance", "Implementation_Timelines", "Supervisory_Expectations"]
+            why_graphrag_better="LLMs may have outdated supply chain data and production capacity information. GraphRAG can access current semiconductor industry reports, manufacturing data, and automotive production statistics to verify lead times and capacity claims.",
+            expected_evidence_types=["Semiconductor_Reports", "Manufacturing_Data", "Automotive_Production", "Supply_Chain_Analysis"]
         ),
         
         ExampleText(
-            id="simple-factual-1",
+            id="meta-metaverse-investment-1",
+            title="Meta Metaverse Investment Strategy",
+            text="Meta's Reality Labs division reported $13.7 billion in losses for 2023, despite revenue growth of 7% to $1.9 billion. The company's Quest 3 VR headset has sold 2.3 million units since launch, capturing 75% of the VR market share. Meta projects the metaverse market will reach $800 billion by 2030, justifying continued R&D investment.",
+            category="technology",
+            complexity="intermediate",
+            why_graphrag_better="LLMs may have outdated Meta financial data and VR market statistics. GraphRAG can access recent earnings reports, VR market analysis, and metaverse investment tracking to verify specific loss figures and market projections.",
+            expected_evidence_types=["Meta_Earnings", "VR_Market_Analysis", "Metaverse_Investment", "Technology_Reports"]
+        ),
+        
+        ExampleText(
+            id="simple-factual-baseline-1",
             title="Basic Company Information (Baseline Test)",
-            text="Apple Inc. was founded in 1976 by Steve Jobs, Steve Wozniak, and Ronald Wayne. The company is headquartered in Cupertino, California, and is currently led by CEO Tim Cook.",
+            text="Apple Inc. was founded in 1976 by Steve Jobs, Steve Wozniak, and Ronald Wayne. The company is headquartered in Cupertino, California, and is currently led by CEO Tim Cook. Apple's market capitalization exceeded $3 trillion in 2023, making it the world's most valuable company.",
             category="basic_facts",
             complexity="basic",
-            why_graphrag_better="This is a baseline test - both LLM and GraphRAG should handle this well. Demonstrates that GraphRAG maintains accuracy on simple facts while excelling on complex compliance queries.",
-            expected_evidence_types=["Public_Records", "Company_Filings", "News_Sources"]
+            why_graphrag_better="This is a baseline test - both LLM and GraphRAG should handle this well. Demonstrates that GraphRAG maintains accuracy on simple facts while excelling on complex financial and market data queries.",
+            expected_evidence_types=["Public_Records", "Company_Filings", "Market_Data", "News_Sources"]
         )
     ]
     
@@ -767,14 +1047,28 @@ async def root():
     """Root endpoint"""
     return {
         "service": "GraphRAG Fact Check API",
-        "version": "1.0.0",
-        "description": "Enhanced fact-checking using compliance-specific knowledge retrieval",
+        "version": "2.0.0",
+        "description": "Enhanced fact-checking using compliance-specific knowledge retrieval and relationship-aware analysis",
+        "features": [
+            "Traditional vector similarity fact-checking",
+            "Relationship-aware fact-checking with regulatory cascade detection",
+            "Multi-hop graph traversal for hidden connections",
+            "Hybrid vector + graph analysis"
+        ],
         "endpoints": {
-            "fact_check": "/fact-check-graphrag",
+            "traditional_fact_check": "/fact-check-graphrag",
+            "enhanced_fact_check": "/fact-check-enhanced",
+            "regulatory_cascade_demo": "/regulatory-cascade-demo",
             "example_texts": "/example-texts",
             "health": "/health",
             "docs": "/docs"
-        }
+        },
+        "advantages": [
+            "Detects regulatory cascades invisible to vector embeddings",
+            "Leverages semantic relationships between FactBlocks",
+            "Finds contradictions through graph analysis",
+            "Provides insights LLMs cannot access"
+        ]
     }
 
 if __name__ == "__main__":

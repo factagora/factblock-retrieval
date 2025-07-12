@@ -1,0 +1,388 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "generated_date": "2025-07-11T12:00:00Z",
+    "total_factblocks": 5,
+    "total_relationships": 3,
+    "description": "Sample FactBlock dataset for testing GraphRAG system"
+  },
+  "factblocks": [
+    {
+      "id": "fb_001",
+      "claim": "OPEC agreed to reduce oil production by 2 million barrels per day",
+      "evidence": "Major oil-producing countries in OPEC reached consensus on significant production cuts to stabilize crude oil prices",
+      "verdict": "verified",
+      "confidence_score": 0.95,
+      "summary": "OPEC production cuts impact global oil supply and energy markets",
+      "processed_date": "2025-07-11T10:00:00Z",
+      "status": "active",
+      "version": "1.0",
+      "source_metadata": {
+        "source_url": "https://example.com/opec-news",
+        "source_type": "news_article",
+        "author": "Energy Reporter",
+        "publication": "Energy Daily",
+        "published_date": "2025-07-10",
+        "credibility_score": 0.9,
+        "language": "en"
+      },
+      "financial_metadata": {
+        "market_impact": {
+          "impact_level": "high",
+          "affected_sectors": ["energy", "transportation", "manufacturing"],
+          "time_horizon": "short_term",
+          "volatility_impact": 0.8
+        },
+        "investment_themes": [
+          {
+            "theme_name": "energy_investment",
+            "relevance": 0.9
+          },
+          {
+            "theme_name": "commodity_trading",
+            "relevance": 0.8
+          }
+        ],
+        "alpha_potential": 0.7,
+        "applicable_strategies": ["energy_sector_rotation", "commodity_momentum"],
+        "risk_factors": ["regulatory_risk", "geopolitical_risk"]
+      },
+      "entities": [
+        {
+          "name": "OPEC",
+          "entity_type": "organization",
+          "confidence": 0.95
+        },
+        {
+          "name": "oil production",
+          "entity_type": "economic_indicator",
+          "confidence": 0.9
+        }
+      ],
+      "topics": [
+        {
+          "name": "energy policy",
+          "topic_type": "policy",
+          "relevance_score": 0.9
+        },
+        {
+          "name": "oil markets",
+          "topic_type": "market",
+          "relevance_score": 0.95
+        }
+      ],
+      "total_connections": 2,
+      "outgoing_relationships": ["rel_001", "rel_002"],
+      "incoming_relationships": []
+    },
+    {
+      "id": "fb_002", 
+      "claim": "Federal Reserve raises interest rates by 0.75 basis points to combat inflation",
+      "evidence": "The Federal Reserve announced a 75 basis point increase in the federal funds rate citing persistent inflation concerns",
+      "verdict": "verified",
+      "confidence_score": 0.92,
+      "summary": "Fed monetary policy tightening affects financial markets and economic growth",
+      "processed_date": "2025-07-11T10:30:00Z",
+      "status": "active",
+      "version": "1.0",
+      "source_metadata": {
+        "source_url": "https://example.com/fed-news",
+        "source_type": "official_statement",
+        "author": "Federal Reserve",
+        "publication": "Fed Communications",
+        "published_date": "2025-07-09",
+        "credibility_score": 0.98,
+        "language": "en"
+      },
+      "financial_metadata": {
+        "market_impact": {
+          "impact_level": "high",
+          "affected_sectors": ["financial", "real_estate", "technology"],
+          "time_horizon": "medium_term",
+          "volatility_impact": 0.9
+        },
+        "investment_themes": [
+          {
+            "theme_name": "monetary_policy",
+            "relevance": 0.95
+          },
+          {
+            "theme_name": "interest_rate_sensitivity",
+            "relevance": 0.9
+          }
+        ],
+        "alpha_potential": 0.8,
+        "applicable_strategies": ["rate_sensitive_rotation", "defensive_positioning"],
+        "risk_factors": ["inflation_risk", "recession_risk"]
+      },
+      "entities": [
+        {
+          "name": "Federal Reserve",
+          "entity_type": "organization",
+          "confidence": 0.98
+        },
+        {
+          "name": "interest rates",
+          "entity_type": "economic_indicator",
+          "confidence": 0.95
+        },
+        {
+          "name": "inflation",
+          "entity_type": "economic_indicator",
+          "confidence": 0.9
+        }
+      ],
+      "topics": [
+        {
+          "name": "monetary policy",
+          "topic_type": "policy",
+          "relevance_score": 0.95
+        },
+        {
+          "name": "inflation control",
+          "topic_type": "economic",
+          "relevance_score": 0.9
+        }
+      ],
+      "total_connections": 1,
+      "outgoing_relationships": ["rel_003"],
+      "incoming_relationships": ["rel_001"]
+    },
+    {
+      "id": "fb_003",
+      "claim": "Transportation sector faces rising fuel costs due to energy market volatility",
+      "evidence": "Airlines and shipping companies report significant increases in operational costs following recent energy market developments",
+      "verdict": "verified",
+      "confidence_score": 0.85,
+      "summary": "Energy price volatility creates operational challenges for transportation companies",
+      "processed_date": "2025-07-11T11:00:00Z",
+      "status": "active",
+      "version": "1.0",
+      "source_metadata": {
+        "source_url": "https://example.com/transport-news",
+        "source_type": "industry_report",
+        "author": "Transport Analyst",
+        "publication": "Industry Weekly",
+        "published_date": "2025-07-08",
+        "credibility_score": 0.8,
+        "language": "en"
+      },
+      "financial_metadata": {
+        "market_impact": {
+          "impact_level": "medium",
+          "affected_sectors": ["transportation", "logistics", "aviation"],
+          "time_horizon": "short_term",
+          "volatility_impact": 0.6
+        },
+        "investment_themes": [
+          {
+            "theme_name": "transportation_costs",
+            "relevance": 0.9
+          },
+          {
+            "theme_name": "energy_dependency",
+            "relevance": 0.8
+          }
+        ],
+        "alpha_potential": 0.5,
+        "applicable_strategies": ["sector_rotation", "cost_inflation_hedge"],
+        "risk_factors": ["operational_risk", "commodity_price_risk"]
+      },
+      "entities": [
+        {
+          "name": "transportation sector",
+          "entity_type": "industry",
+          "confidence": 0.9
+        },
+        {
+          "name": "fuel costs",
+          "entity_type": "economic_indicator",
+          "confidence": 0.85
+        }
+      ],
+      "topics": [
+        {
+          "name": "operational costs",
+          "topic_type": "business",
+          "relevance_score": 0.9
+        },
+        {
+          "name": "sector impact",
+          "topic_type": "market",
+          "relevance_score": 0.8
+        }
+      ],
+      "total_connections": 1,
+      "outgoing_relationships": [],
+      "incoming_relationships": ["rel_002"]
+    },
+    {
+      "id": "fb_004",
+      "claim": "Banking sector expects increased loan demand following economic policy changes",
+      "evidence": "Major banks report anticipation of higher lending activity as monetary policy adjustments create new borrowing dynamics",
+      "verdict": "verified",
+      "confidence_score": 0.88,
+      "summary": "Financial institutions prepare for changing lending environment amid policy shifts",
+      "processed_date": "2025-07-11T11:30:00Z",
+      "status": "active",
+      "version": "1.0",
+      "source_metadata": {
+        "source_url": "https://example.com/banking-news",
+        "source_type": "financial_report",
+        "author": "Banking Correspondent",
+        "publication": "Financial Times",
+        "published_date": "2025-07-07",
+        "credibility_score": 0.85,
+        "language": "en"
+      },
+      "financial_metadata": {
+        "market_impact": {
+          "impact_level": "medium",
+          "affected_sectors": ["financial", "banking", "lending"],
+          "time_horizon": "medium_term",
+          "volatility_impact": 0.5
+        },
+        "investment_themes": [
+          {
+            "theme_name": "banking_growth",
+            "relevance": 0.8
+          },
+          {
+            "theme_name": "lending_expansion",
+            "relevance": 0.9
+          }
+        ],
+        "alpha_potential": 0.6,
+        "applicable_strategies": ["financial_sector_focus", "interest_rate_play"],
+        "risk_factors": ["credit_risk", "regulatory_risk"]
+      },
+      "entities": [
+        {
+          "name": "banking sector",
+          "entity_type": "industry",
+          "confidence": 0.9
+        },
+        {
+          "name": "loan demand",
+          "entity_type": "economic_indicator",
+          "confidence": 0.8
+        }
+      ],
+      "topics": [
+        {
+          "name": "lending activity",
+          "topic_type": "business",
+          "relevance_score": 0.9
+        },
+        {
+          "name": "financial services",
+          "topic_type": "industry",
+          "relevance_score": 0.8
+        }
+      ],
+      "total_connections": 1,
+      "outgoing_relationships": [],
+      "incoming_relationships": ["rel_003"]
+    },
+    {
+      "id": "fb_005",
+      "claim": "Technology sector shows resilience amid broader market volatility",
+      "evidence": "Tech companies maintain strong performance indicators despite macroeconomic uncertainties affecting other sectors",
+      "verdict": "verified",
+      "confidence_score": 0.82,
+      "summary": "Technology sector demonstrates relative stability in volatile market conditions",
+      "processed_date": "2025-07-11T12:00:00Z",
+      "status": "active",
+      "version": "1.0",
+      "source_metadata": {
+        "source_url": "https://example.com/tech-news",
+        "source_type": "market_analysis",
+        "author": "Tech Analyst",
+        "publication": "Tech Market Review",
+        "published_date": "2025-07-06",
+        "credibility_score": 0.8,
+        "language": "en"
+      },
+      "financial_metadata": {
+        "market_impact": {
+          "impact_level": "low",
+          "affected_sectors": ["technology", "software", "hardware"],
+          "time_horizon": "long_term",
+          "volatility_impact": 0.3
+        },
+        "investment_themes": [
+          {
+            "theme_name": "tech_resilience",
+            "relevance": 0.9
+          },
+          {
+            "theme_name": "growth_stability",
+            "relevance": 0.8
+          }
+        ],
+        "alpha_potential": 0.7,
+        "applicable_strategies": ["tech_focus", "growth_investing"],
+        "risk_factors": ["market_risk", "technology_risk"]
+      },
+      "entities": [
+        {
+          "name": "technology sector",
+          "entity_type": "industry",
+          "confidence": 0.9
+        },
+        {
+          "name": "market volatility",
+          "entity_type": "economic_indicator",
+          "confidence": 0.8
+        }
+      ],
+      "topics": [
+        {
+          "name": "sector performance",
+          "topic_type": "market",
+          "relevance_score": 0.9
+        },
+        {
+          "name": "market stability",
+          "topic_type": "economic",
+          "relevance_score": 0.8
+        }
+      ],
+      "total_connections": 0,
+      "outgoing_relationships": [],
+      "incoming_relationships": []
+    }
+  ],
+  "inter_factblock_relationships": [
+    {
+      "id": "rel_001",
+      "source_factblock_id": "fb_001",
+      "target_factblock_id": "fb_002",
+      "relationship_type": "indirect_impact",
+      "strength": 0.7,
+      "confidence": 0.8,
+      "investment_insight": "OPEC production cuts may influence Fed policy decisions regarding energy-driven inflation",
+      "created_date": "2025-07-11T10:00:00Z"
+    },
+    {
+      "id": "rel_002",
+      "source_factblock_id": "fb_001",
+      "target_factblock_id": "fb_003",
+      "relationship_type": "direct_impact",
+      "strength": 0.9,
+      "confidence": 0.85,
+      "investment_insight": "Oil production cuts directly affect transportation fuel costs and operational expenses",
+      "created_date": "2025-07-11T10:30:00Z"
+    },
+    {
+      "id": "rel_003",
+      "source_factblock_id": "fb_002",
+      "target_factblock_id": "fb_004",
+      "relationship_type": "policy_influence",
+      "strength": 0.8,
+      "confidence": 0.9,
+      "investment_insight": "Interest rate changes create new lending opportunities and affect banking sector dynamics",
+      "created_date": "2025-07-11T11:00:00Z"
+    }
+  ]
+}

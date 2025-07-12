@@ -22,9 +22,9 @@ try:
     import uvicorn
     
     print("✓ Imports successful")
-    print("Starting server on http://localhost:8001")
+    print("Starting server on http://localhost:8002")
     
-    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=8002, log_level="info")
     
 except Exception as e:
     print(f"✗ Error: {e}")
