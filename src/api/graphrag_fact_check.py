@@ -33,7 +33,16 @@ from graphrag.vector_retriever import GraphVectorRetriever
 from graphrag.cypher_retriever import TextToCypherRetriever
 
 # Import Enhanced GraphRAG components
-from ..graphrag.enhanced_graphrag import EnhancedGraphRAG, create_enhanced_fact_check_endpoint
+try:
+    from src.graphrag.enhanced_graphrag import EnhancedGraphRAG, create_enhanced_fact_check_endpoint
+except ImportError:
+    # Fallback for different import contexts
+    try:
+        from graphrag.enhanced_graphrag import EnhancedGraphRAG, create_enhanced_fact_check_endpoint
+    except ImportError:
+        print("⚠️ Enhanced GraphRAG not available - running in basic mode")
+        EnhancedGraphRAG = None
+        create_enhanced_fact_check_endpoint = None
 
 app = FastAPI(title="GraphRAG Fact Check API", version="1.0.0")
 
@@ -203,13 +212,17 @@ def initialize_retrieval_system():
         graphrag_router = SmartGraphRAGRouter(performance_mode=PerformanceMode.BALANCED)
         
         # Initialize Enhanced GraphRAG system
-        neo4j_config = config.to_dict().get('neo4j', {})
-        enhanced_graphrag = EnhancedGraphRAG(
-            neo4j_uri=neo4j_config.get('uri', 'bolt://localhost:7687'),
-            neo4j_user=neo4j_config.get('user', 'neo4j'),
-            neo4j_password=neo4j_config.get('password', 'password'),
-            enable_parallel_processing=True
-        )
+        if EnhancedGraphRAG is not None:
+            neo4j_config = config.to_dict().get('neo4j', {})
+            enhanced_graphrag = EnhancedGraphRAG(
+                neo4j_uri=neo4j_config.get('uri', 'bolt://localhost:7687'),
+                neo4j_user=neo4j_config.get('user', 'neo4j'),
+                neo4j_password=neo4j_config.get('password', 'password'),
+                enable_parallel_processing=True
+            )
+        else:
+            enhanced_graphrag = None
+            print("⚠️ Enhanced GraphRAG system not available")
         
         # Initialize GraphRAG components
         print("Initializing GraphRAG components...")

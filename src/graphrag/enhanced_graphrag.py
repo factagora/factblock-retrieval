@@ -13,11 +13,20 @@ from dataclasses import dataclass, asdict
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .relationship_aware_fact_checker import RelationshipAwareFactChecker, FactCheckResult
+# Import relationship checker with proper handling
+try:
+    from .relationship_aware_fact_checker import RelationshipAwareFactChecker, FactCheckResult
+except ImportError:
+    try:
+        from src.graphrag.relationship_aware_fact_checker import RelationshipAwareFactChecker, FactCheckResult
+    except ImportError:
+        print("⚠️ RelationshipAwareFactChecker not available")
+        RelationshipAwareFactChecker = None
+        FactCheckResult = None
 
 # Import basic retrieval as fallback for traditional GraphRAG
 try:
-    from ..retrieval.graph_rag import GraphRAG
+    from src.retrieval.graph_rag import GraphRAG
 except ImportError:
     # Fallback implementation
     class GraphRAG:
@@ -86,9 +95,14 @@ class EnhancedGraphRAG:
         
         # Initialize components
         self.traditional_rag = GraphRAG(neo4j_uri, neo4j_user, neo4j_password)
-        self.relationship_checker = RelationshipAwareFactChecker(
-            neo4j_uri, neo4j_user, neo4j_password
-        )
+        
+        if RelationshipAwareFactChecker is not None:
+            self.relationship_checker = RelationshipAwareFactChecker(
+                neo4j_uri, neo4j_user, neo4j_password
+            )
+        else:
+            self.relationship_checker = None
+            self.logger.warning("RelationshipAwareFactChecker not available")
         self.embedding_model = embedding_model
         
         self.logger = logging.getLogger(__name__)
@@ -234,6 +248,30 @@ class EnhancedGraphRAG:
         """Run relationship-aware fact checking"""
         start_time = time.time()
         
+        if self.relationship_checker is None:
+            relationship_time = (time.time() - start_time) * 1000
+            # Create a basic fallback result
+            if FactCheckResult is not None:
+                return FactCheckResult(
+                    verdict='INSUFFICIENT_EVIDENCE',
+                    confidence=0.0,
+                    vector_evidence=[],
+                    relationship_evidence=[],
+                    regulatory_cascades=[],
+                    explanation="Relationship checker not available",
+                    unique_insights=[]
+                ), relationship_time
+            else:
+                # Even more basic fallback
+                return {
+                    'verdict': 'INSUFFICIENT_EVIDENCE',
+                    'confidence': 0.0,
+                    'relationship_evidence': [],
+                    'regulatory_cascades': [],
+                    'explanation': "Relationship checker not available",
+                    'unique_insights': []
+                }, relationship_time
+        
         try:
             result = self.relationship_checker.fact_check_with_relationships(
                 claim=claim,
@@ -250,16 +288,25 @@ class EnhancedGraphRAG:
             relationship_time = (time.time() - start_time) * 1000
             
             # Return fallback result
-            from .relationship_aware_fact_checker import FactCheckResult
-            return FactCheckResult(
-                verdict='ERROR',
-                confidence=0.0,
-                vector_evidence=[],
-                relationship_evidence=[],
-                regulatory_cascades=[],
-                explanation=f"Relationship fact-check failed: {str(e)}",
-                unique_insights=[]
-            ), relationship_time
+            if FactCheckResult is not None:
+                return FactCheckResult(
+                    verdict='ERROR',
+                    confidence=0.0,
+                    vector_evidence=[],
+                    relationship_evidence=[],
+                    regulatory_cascades=[],
+                    explanation=f"Relationship fact-check failed: {str(e)}",
+                    unique_insights=[]
+                ), relationship_time
+            else:
+                return {
+                    'verdict': 'ERROR',
+                    'confidence': 0.0,
+                    'relationship_evidence': [],
+                    'regulatory_cascades': [],
+                    'explanation': f"Relationship fact-check failed: {str(e)}",
+                    'unique_insights': []
+                }, relationship_time
     
     def _combine_results(
         self,
