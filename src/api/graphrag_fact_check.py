@@ -279,6 +279,12 @@ def extract_claims_from_text(text: str) -> List[Dict[str, Any]]:
 def retrieve_compliance_evidence(claim_text: str, compliance_focus: Optional[List[str]] = None, max_evidence: int = 5) -> List[Dict[str, Any]]:
     """Retrieve relevant compliance evidence for a claim using advanced GraphRAG"""
     
+    # Ensure retrieval system is initialized
+    global graphrag_router
+    if not graphrag_router:
+        print("⚠️ GraphRAG router not initialized, initializing now...")
+        initialize_retrieval_system()
+    
     # Try advanced GraphRAG router first
     if graphrag_router:
         try:
@@ -301,13 +307,16 @@ def retrieve_compliance_evidence(claim_text: str, compliance_focus: Optional[Lis
             # Process GraphRAG router results
             if search_results and search_results.get('combined_results'):
                 for result in search_results['combined_results']:
+                    factblock = result.get('factblock', {})
+                    # Combine claim and evidence for content
+                    content = f"{factblock.get('claim', '')} | {factblock.get('evidence', '')}"
                     evidence.append({
-                        'content': result.get('content', ''),
-                        'source_type': result.get('source_type', 'GraphRAG'),
+                        'content': content,
+                        'source_type': factblock.get('source_type', 'GraphRAG'),
                         'score': result.get('score', 0.0),
                         'metadata': result.get('metadata', {}),
-                        'category': result.get('metadata', {}).get('category', 'unknown'),
-                        'retrieval_method': result.get('retrieval_method', 'hybrid')
+                        'category': factblock.get('affected_sectors', ['unknown'])[0] if factblock.get('affected_sectors') else 'unknown',
+                        'retrieval_method': f"{result.get('source', 'hybrid')}_router"
                     })
             
             # If no combined results, check individual vector and cypher results
