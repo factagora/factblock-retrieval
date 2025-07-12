@@ -7,6 +7,11 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Prevent multiple deployments from running simultaneously
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
   AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}

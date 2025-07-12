@@ -6,6 +6,11 @@ on:
     - cron: '0 2 * * 0'
   workflow_dispatch: # Allow manual trigger
 
+# Prevent multiple cleanup jobs from running simultaneously
+concurrency:
+  group: cleanup-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   AZURE_VM_IP: ${{ secrets.AZURE_VM_IP }}
   AZURE_VM_USER: ${{ secrets.AZURE_VM_USER }}
