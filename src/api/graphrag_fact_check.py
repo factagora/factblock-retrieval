@@ -964,85 +964,95 @@ async def get_example_texts():
     """
     
     examples = [
-        # Examples based on actual factblock-collection data
+        # Examples based on ACTUAL FactBlocks in our Neo4j database
         ExampleText(
-            id="fed-rate-policy-1",
+            id="opec-oil-production-cuts",
+            title="OPEC Oil Production Cuts",
+            text="OPEC이 감산 합의에 도달했으며, 주요 산유국들이 원유 생산량을 일일 200만 배럴 감축하기로 합의했다. 이는 유가 안정화를 위한 조치로 평가된다.",
+            category="energy",
+            complexity="intermediate",
+            why_graphrag_better="Vector embeddings might find general OPEC information, but our knowledge graph contains specific factual data about the 200만 배럴 daily production cut agreement. GraphRAG can retrieve exact figures and context that LLMs would need to estimate or might get wrong.",
+            expected_evidence_types=["OPEC_Agreements", "Oil_Production_Data", "Energy_Policy", "Market_Analysis"]
+        ),
+        
+        ExampleText(
+            id="airline-fuel-cost-impact",
+            title="Airline Fuel Cost Increases",
+            text="글로벌 항공사의 연료비가 15% 상승했으며, 원유 공급 감소로 인한 유가 상승이 항공유 가격을 직접적으로 끌어올렸다. 이로 인해 항공사들의 수익성이 크게 악화되었다.",
+            category="transportation",
+            complexity="intermediate",
+            why_graphrag_better="While LLMs might discuss fuel costs generally, our FactBlocks contain the specific 15% increase figure and causal relationship to oil supply reductions. GraphRAG provides concrete evidence rather than general estimates.",
+            expected_evidence_types=["Airline_Cost_Data", "Fuel_Price_Analysis", "Transportation_Economics", "Energy_Market_Impact"]
+        ),
+        
+        ExampleText(
+            id="energy-transportation-cascade",
+            title="OPEC Cuts → Airline Industry Impact",
+            text="원유 생산량 감축으로 인한 에너지 시장 충격이 항공 업계에도 영향을 미쳤다. OPEC의 감산 합의 이후 항공사들의 연료비가 크게 상승했다.",
+            category="energy",
+            complexity="advanced",
+            why_graphrag_better="This demonstrates our system's key advantage: detecting regulatory cascades across sectors. Vector similarity would struggle to connect 'OPEC production cuts' with 'airline fuel costs' as they appear in different semantic spaces. Our knowledge graph reveals the causal chain: oil production → fuel prices → airline costs.",
+            expected_evidence_types=["OPEC_Policy", "Energy_Prices", "Airline_Operations", "Cross_Sector_Impact"]
+        ),
+        
+        ExampleText(
+            id="federal-reserve-rate-hikes",
             title="Federal Reserve Interest Rate Policy",
-            text="The Federal Reserve raised interest rates by 25 basis points in March 2024, bringing the federal funds rate to 5.25-5.50%. This decision was driven by persistent inflation concerns and signals the Fed's commitment to achieving its 2% inflation target. The rate increase is expected to impact mortgage rates, with 30-year fixed mortgages potentially rising to 7.5% by year-end.",
-            category="financial",
+            text="미국 연준이 2022년 기준금리를 7차례 인상했으며, 연방준비제도가 인플레이션 억제를 위해 공격적인 통화긴축 정책을 실시했다.",
+            category="financials",
             complexity="intermediate",
-            why_graphrag_better="LLMs often have outdated Fed policy information and may confuse rate targets with actual rates. GraphRAG can access current FOMC minutes, Fed statements, and real-time economic data to verify policy decisions and their implications.",
-            expected_evidence_types=["FOMC_Minutes", "Fed_Statements", "Economic_Data", "Rate_Analysis"]
+            why_graphrag_better="LLMs may have outdated information about Fed policy timing and frequency. Our FactBlocks contain the specific count of '7차례' (7 times) rate hikes in 2022, providing concrete evidence that can be verified against actual policy records.",
+            expected_evidence_types=["Fed_Policy_Decisions", "Interest_Rate_Data", "Monetary_Policy", "Inflation_Response"]
         ),
         
         ExampleText(
-            id="nvidia-ai-growth-1",
-            title="NVIDIA AI Market Position",
-            text="NVIDIA's data center revenue reached $47.5 billion in fiscal 2024, representing a 217% year-over-year growth driven by AI and machine learning demand. The company's H100 GPU chips are powering major AI infrastructure deployments at Microsoft, Google, and Meta, with order backlogs extending into 2025. NVIDIA now captures approximately 80% of the AI chip market share.",
-            category="technology",
+            id="semiconductor-shortage-timeline",
+            title="Semiconductor Shortage Duration",
+            text="반도체 부족 현상이 2024년까지 지속될 전망이다. 코로나19 여파와 지정학적 긴장으로 인한 반도체 공급망 차질이 장기화되고 있다.",
+            category="semiconductors",
+            complexity="intermediate", 
+            why_graphrag_better="While LLMs might provide general information about chip shortages, our FactBlocks contain specific timeline predictions ('2024년까지') and causal factors. GraphRAG provides industry-specific evidence rather than generalized responses.",
+            expected_evidence_types=["Semiconductor_Supply_Analysis", "Industry_Forecasts", "Supply_Chain_Data", "Market_Projections"]
+        ),
+        
+        ExampleText(
+            id="hyundai-production-cuts",
+            title="Hyundai Production Reduction",
+            text="현대자동차는 차량 생산량을 15% 감축한다고 발표했다. 반도체 수급 불안정으로 인해 현대자동차가 주요 차종의 생산 일정을 조정하고 출하량을 줄이기로 결정했다.",
+            category="automobiles",
+            complexity="intermediate",
+            why_graphrag_better="LLMs may not have access to specific corporate production decisions and exact percentage cuts. Our FactBlocks contain the precise '15% 감축' figure and direct connection to semiconductor supply issues for Hyundai specifically.",
+            expected_evidence_types=["Automotive_Production_Data", "Hyundai_Announcements", "Semiconductor_Impact", "Manufacturing_Adjustments"]
+        ),
+        
+        ExampleText(
+            id="semiconductor-automotive-cascade",
+            title="Semiconductor Shortage → Automotive Production Impact",
+            text="반도체 부족으로 인해 자동차 제조업체들이 생산 차질을 겪고 있다. 현대자동차를 비롯한 글로벌 완성차 업체들이 생산량 감축을 발표하며 공급망 위기가 심화되고 있다.",
+            category="semiconductors",
             complexity="advanced",
-            why_graphrag_better="LLMs may have outdated financial data and market share information. GraphRAG can access recent earnings reports, market analysis, and competitive intelligence to verify specific revenue figures and market positioning claims.",
-            expected_evidence_types=["Earnings_Reports", "Market_Analysis", "Competitive_Intelligence", "Industry_Reports"]
+            why_graphrag_better="This showcases cross-sector relationship detection. Vector embeddings might miss the connection between 'semiconductor supply issues' and 'specific automotive production cuts.' Our graph relationships reveal how chip shortages directly impact car manufacturing decisions, with concrete evidence from Hyundai's 15% production reduction.",
+            expected_evidence_types=["Semiconductor_Supply_Chain", "Automotive_Production_Impact", "Manufacturing_Disruption", "Industry_Relationships"]
         ),
         
         ExampleText(
-            id="banking-sector-impact-1",
-            title="Banking Sector Interest Rate Impact",
-            text="Rising interest rates have improved net interest margins for regional banks, with the KBW Regional Banking Index gaining 15% following the Fed's rate decisions. Banks like PNC Financial and Fifth Third Bancorp reported 40 basis point improvements in their net interest margins. However, commercial real estate loan portfolios remain under pressure with default rates rising to 3.2%.",
-            category="financial",
+            id="fed-monetary-policy-impact",
+            title="Federal Reserve Policy Ripple Effects",
+            text="미국 연준의 공격적인 금리 인상이 글로벌 시장에 광범위한 영향을 미쳤다. 2022년 7차례 금리 인상은 다양한 산업 부문의 투자 심리를 위축시켰다.",
+            category="financials",
             complexity="advanced",
-            why_graphrag_better="LLMs lack real-time banking sector data and may have outdated default rates. GraphRAG can access current banking earnings, regulatory reports, and commercial real estate market data to verify specific performance metrics.",
-            expected_evidence_types=["Banking_Earnings", "Regulatory_Reports", "CRE_Market_Data", "Industry_Analysis"]
+            why_graphrag_better="While LLMs might discuss Fed policy generally, our system can trace specific policy decisions (7차례 금리 인상) to their broader market impacts. This demonstrates how monetary policy cascades through multiple sectors, with specific evidence rather than general economic theory.",
+            expected_evidence_types=["Fed_Policy_Records", "Market_Impact_Analysis", "Investment_Sentiment", "Economic_Indicators"]
         ),
         
         ExampleText(
-            id="google-ai-investment-1",
-            title="Google AI Infrastructure Investment",
-            text="Google announced a $20 billion investment in AI infrastructure for 2024, including new data centers in Virginia and Texas. The company's Cloud division revenue grew 35% year-over-year, reaching $9.5 billion in Q4 2023, driven by AI services adoption. Google's Bard AI service has reached 180 million active users, competing directly with OpenAI's ChatGPT.",
-            category="technology",
-            complexity="intermediate",
-            why_graphrag_better="LLMs may have outdated Google financial data and AI service metrics. GraphRAG can access recent earnings reports, cloud market analysis, and AI adoption statistics to verify investment amounts and user growth claims.",
-            expected_evidence_types=["Google_Earnings", "Cloud_Market_Data", "AI_Adoption_Stats", "Investment_Analysis"]
-        ),
-        
-        ExampleText(
-            id="renewable-energy-policy-1",
-            title="Renewable Energy Tax Credits",
-            text="The Inflation Reduction Act's renewable energy tax credits have driven $110 billion in clean energy investments since enactment. Solar installations increased by 52% in 2023, with utility-scale projects accounting for 65% of new capacity. The Investment Tax Credit (ITC) for solar projects remains at 30% through 2026, providing strong incentives for continued deployment.",
-            category="environmental",
-            complexity="intermediate",
-            why_graphrag_better="LLMs may have outdated renewable energy statistics and tax credit information. GraphRAG can access current energy deployment data, policy documents, and investment tracking to verify specific growth rates and incentive levels.",
-            expected_evidence_types=["Energy_Deployment_Data", "Policy_Documents", "Investment_Tracking", "Tax_Credit_Analysis"]
-        ),
-        
-        ExampleText(
-            id="supply-chain-disruption-1",
-            title="Semiconductor Supply Chain Recovery",
-            text="Global semiconductor lead times have improved to 24 weeks in Q1 2024, down from the peak of 32 weeks in 2022. Taiwan Semiconductor Manufacturing Company (TSMC) increased production capacity by 20% with new facilities in Arizona and Japan. However, automotive chip shortages persist, with Ford and GM reporting continued production delays.",
-            category="technology",
-            complexity="advanced",
-            why_graphrag_better="LLMs may have outdated supply chain data and production capacity information. GraphRAG can access current semiconductor industry reports, manufacturing data, and automotive production statistics to verify lead times and capacity claims.",
-            expected_evidence_types=["Semiconductor_Reports", "Manufacturing_Data", "Automotive_Production", "Supply_Chain_Analysis"]
-        ),
-        
-        ExampleText(
-            id="meta-metaverse-investment-1",
-            title="Meta Metaverse Investment Strategy",
-            text="Meta's Reality Labs division reported $13.7 billion in losses for 2023, despite revenue growth of 7% to $1.9 billion. The company's Quest 3 VR headset has sold 2.3 million units since launch, capturing 75% of the VR market share. Meta projects the metaverse market will reach $800 billion by 2030, justifying continued R&D investment.",
-            category="technology",
-            complexity="intermediate",
-            why_graphrag_better="LLMs may have outdated Meta financial data and VR market statistics. GraphRAG can access recent earnings reports, VR market analysis, and metaverse investment tracking to verify specific loss figures and market projections.",
-            expected_evidence_types=["Meta_Earnings", "VR_Market_Analysis", "Metaverse_Investment", "Technology_Reports"]
-        ),
-        
-        ExampleText(
-            id="simple-factual-baseline-1",
-            title="Basic Company Information (Baseline Test)",
-            text="Apple Inc. was founded in 1976 by Steve Jobs, Steve Wozniak, and Ronald Wayne. The company is headquartered in Cupertino, California, and is currently led by CEO Tim Cook. Apple's market capitalization exceeded $3 trillion in 2023, making it the world's most valuable company.",
-            category="basic_facts",
+            id="simple-opec-baseline",
+            title="OPEC Organization (Baseline Test)",
+            text="OPEC(석유수출국기구)은 세계 주요 산유국들로 구성된 국제기구다. 이 조직은 회원국들의 석유 정책을 조율하고 유가 안정화를 목표로 한다.",
+            category="energy",
             complexity="basic",
-            why_graphrag_better="This is a baseline test - both LLM and GraphRAG should handle this well. Demonstrates that GraphRAG maintains accuracy on simple facts while excelling on complex financial and market data queries.",
-            expected_evidence_types=["Public_Records", "Company_Filings", "Market_Data", "News_Sources"]
+            why_graphrag_better="This baseline test should work well with both approaches. It demonstrates that our GraphRAG system maintains accuracy on straightforward factual information while excelling at the complex relationship reasoning shown in the cascade examples above.",
+            expected_evidence_types=["OPEC_Basic_Info", "Oil_Organization_Data", "Energy_Policy_Overview", "International_Organizations"]
         )
     ]
     
@@ -1052,7 +1062,7 @@ async def get_example_texts():
         examples=examples,
         total_count=len(examples),
         categories=categories,
-        description="Curated example texts designed to showcase GraphRAG's superior fact-checking capabilities in compliance, regulatory, and complex domain-specific scenarios where knowledge graphs provide significant advantages over LLM-only approaches."
+        description="Curated example texts demonstrating our relationship-aware fact-checking technology. These examples show regulatory cascades and cross-sector connections that vector embeddings cannot detect - situations where two seemingly unrelated FactBlocks are actually connected through knowledge graph relationships, revealing insights invisible to traditional similarity-based approaches."
     )
 
 @app.get("/")

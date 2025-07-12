@@ -1,0 +1,73 @@
+[
+  {
+    "example_id": "opec_oil_production",
+    "text": "OPEC이 감산 합의에 도달했으며, 주요 산유국들이 원유 생산량을 일일 200만 배럴 감축하기로 합의했다",
+    "source_claim": "OPEC이 감산 합의에 도달했다",
+    "expected_evidence": "주요 산유국들이 원유 생산량을 일일 200만 배럴 감축하기로 합의했다",
+    "sectors": [
+      "energy"
+    ],
+    "concrete_facts": [
+      "200만 배럴",
+      "일일 감축"
+    ],
+    "entities_mentioned": [
+      "OPEC"
+    ]
+  },
+  {
+    "example_id": "airline_fuel_costs",
+    "text": "글로벌 항공사의 연료비가 15% 상승했으며, 원유 공급 감소로 인한 유가 상승이 항공유 가격을 직접적으로 끌어올렸다",
+    "source_claim": "글로벌 항공사의 연료비가 15% 상승했다",
+    "expected_evidence": "원유 공급 감소로 인한 유가 상승이 항공유 가격을 직접적으로 끌어올렸다",
+    "sectors": [
+      "transportation"
+    ],
+    "concrete_facts": [
+      "15% 상승"
+    ],
+    "entities_mentioned": [
+      "글로벌 항공사"
+    ]
+  },
+  {
+    "example_id": "fed_interest_rates",
+    "text": "미국 연준이 2022년 기준금리를 7차례 인상했으며, 연방준비제도가 인플레이션 억제를 위해 공격적인 통화긴축 정책을 실시했다",
+    "source_claim": "미국 연준이 2022년 기준금리를 7차례 인상했다",
+    "expected_evidence": "연방준비제도가 인플레이션 억제를 위해 공격적인 통화긴축 정책을 실시했다",
+    "sectors": [
+      "financials"
+    ],
+    "concrete_facts": [
+      "2022년",
+      "7차례",
+      "기준금리 인상"
+    ],
+    "entities_mentioned": [
+      "연준",
+      "연방준비제도"
+    ]
+  },
+  {
+    "example_id": "factblock_claim_4",
+    "text": "반도체 부족 현상이 2024년까지 지속될 전망이다 코로나19 여파와 지정학적 긴장으로 인한 반도체 공급망 차질이 장기화되고 있다",
+    "source_claim": "반도체 부족 현상이 2024년까지 지속될 전망이다",
+    "expected_evidence": "코로나19 여파와 지정학적 긴장으로 인한 반도체 공급망 차질이 장기화되고 있다",
+    "sectors": [
+      "semiconductors"
+    ],
+    "confidence": 0.9418699755929696,
+    "impact_level": "high"
+  },
+  {
+    "example_id": "factblock_claim_5",
+    "text": "현대자동차는 차량 생산량을 15% 감축한다고 발표했다 반도체 수급 불안정으로 인해 현대자동차가 주요 차종의 생산 일정을 조정하고 출하량을 줄이기로 결정했다",
+    "source_claim": "현대자동차는 차량 생산량을 15% 감축한다고 발표했다",
+    "expected_evidence": "반도체 수급 불안정으로 인해 현대자동차가 주요 차종의 생산 일정을 조정하고 출하량을 줄이기로 결정했다",
+    "sectors": [
+      "automobiles"
+    ],
+    "confidence": 0.9417807062217826,
+    "impact_level": "medium"
+  }
+]

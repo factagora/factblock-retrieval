@@ -71,14 +71,31 @@ class TextToCypherRetriever:
     def _setup_query_patterns(self):
         """Setup natural language query patterns"""
         self.query_patterns = [
-            # Entity-based patterns
+            # Entity-based patterns - Fixed for our FactBlock schema with Korean support
             {
-                "pattern": r"(?:find|show|get).*(?:factblocks?|claims?).*(?:about|mention|regarding)\s+([A-Za-z\s]+)",
+                "pattern": r"(?:find|show|get).*(?:factblocks?|claims?).*(?:about|mention|regarding)\s+([A-Za-z가-힣\s]+)",
                 "type": "entity_search",
                 "template": """
-                MATCH (f:FactBlock)-[r:MENTIONS]->(e:Entity)
-                WHERE toLower(e.name) CONTAINS toLower($entity)
-                RETURN f, e, r
+                MATCH (f:FactBlock)
+                WHERE toLower(f.claim) CONTAINS toLower($entity)
+                   OR toLower(f.evidence) CONTAINS toLower($entity)
+                   OR toLower(f.summary) CONTAINS toLower($entity)
+                RETURN f
+                ORDER BY f.confidence_score DESC
+                LIMIT $limit
+                """
+            },
+            
+            # Korean entity search patterns
+            {
+                "pattern": r"(OPEC|오펙|산유국|감산|원유|배럴)",
+                "type": "korean_entity_search",
+                "template": """
+                MATCH (f:FactBlock)
+                WHERE toLower(f.claim) CONTAINS toLower($entity)
+                   OR toLower(f.evidence) CONTAINS toLower($entity)
+                   OR toLower(f.summary) CONTAINS toLower($entity)
+                RETURN f
                 ORDER BY f.confidence_score DESC
                 LIMIT $limit
                 """
@@ -206,6 +223,10 @@ class TextToCypherRetriever:
                     mapped_entity = self.entity_mappings.get(entity, entity)
                     params["entity"] = mapped_entity
                 
+                elif pattern_info["type"] == "korean_entity_search":
+                    entity = match.group(1).strip()
+                    params["entity"] = entity
+                
                 elif pattern_info["type"] == "sector_search":
                     sector = match.group(1).strip()
                     params["sector"] = sector
@@ -240,18 +261,39 @@ class TextToCypherRetriever:
                     "original_query": query
                 }
         
-        # Fallback: general text search
+        # Fallback: enhanced general text search with multiple search strategies
+        # Try to extract key terms from the query for better matching
+        key_terms = []
+        
+        # Extract Korean keywords
+        korean_keywords = ["OPEC", "오펙", "감산", "원유", "배럴", "산유국", "항공사", "연료비", "연준", "금리", "현대자동차", "반도체"]
+        for keyword in korean_keywords:
+            if keyword in query:
+                key_terms.append(keyword)
+        
+        # If we found key terms, search for them specifically
+        if key_terms:
+            search_term = key_terms[0]  # Use the first found key term
+        else:
+            search_term = query
+        
         return {
             "type": "fallback_search",
             "cypher_template": """
             MATCH (f:FactBlock)
             WHERE toLower(f.claim) CONTAINS toLower($query)
                OR toLower(f.evidence) CONTAINS toLower($query)
+               OR toLower(f.summary) CONTAINS toLower($query)
+               OR ($search_term IS NOT NULL AND (
+                   toLower(f.claim) CONTAINS toLower($search_term)
+                   OR toLower(f.evidence) CONTAINS toLower($search_term)
+                   OR toLower(f.summary) CONTAINS toLower($search_term)
+               ))
             RETURN f
             ORDER BY f.confidence_score DESC
             LIMIT $limit
             """,
-            "parameters": {"query": query, "limit": 10},
+            "parameters": {"query": query, "search_term": search_term, "limit": 10},
             "original_query": query
         }
     

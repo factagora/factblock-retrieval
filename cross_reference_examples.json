@@ -1,0 +1,39 @@
+[
+  {
+    "example_id": "energy_sector_chain",
+    "text": "원유 생산량 감축으로 인한 에너지 시장 충격이 항공 업계에도 영향을 미쳤다. OPEC의 감산 합의 이후 항공사들의 연료비가 크게 상승했다.",
+    "cross_references": [
+      "OPEC이 감산 합의에 도달했다",
+      "글로벌 항공사의 연료비가 15% 상승했다"
+    ],
+    "sectors": [
+      "energy",
+      "transportation"
+    ],
+    "relationship_type": "causal_chain"
+  },
+  {
+    "example_id": "fed_policy_ripples",
+    "text": "미국 연준의 공격적인 금리 인상이 글로벌 시장에 광범위한 영향을 미쳤다. 2022년 7차례 금리 인상은 다양한 산업 부문의 투자 심리를 위축시켰다.",
+    "cross_references": [
+      "미국 연준이 2022년 기준금리를 7차례 인상했다"
+    ],
+    "sectors": [
+      "financials"
+    ],
+    "relationship_type": "policy_impact"
+  },
+  {
+    "example_id": "entity_multi_mention",
+    "text": "OPEC이 감산 합의에 도달했다 또한 OPEC이 감산 합의에 도달했다",
+    "cross_references": [
+      "OPEC이 감산 합의에 도달했다",
+      "OPEC이 감산 합의에 도달했다"
+    ],
+    "shared_entity": "OPEC",
+    "sectors": [
+      "energy"
+    ],
+    "relationship_type": "shared_entity"
+  }
+]

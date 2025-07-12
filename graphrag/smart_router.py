@@ -74,9 +74,10 @@ class SmartGraphRAGRouter:
         """Setup patterns for query classification"""
         self.patterns = {
             QueryType.ENTITY_SPECIFIC: [
-                r'\b(OPEC|Tesla|Apple|Microsoft|Google|Amazon|Fed|Federal Reserve|연준)\b',
+                r'\b(OPEC|오펙|Tesla|Apple|Microsoft|Google|Amazon|Fed|Federal Reserve|연준|현대자동차|반도체)\b',
                 r'\babout\s+[A-Z][a-z]+\b',
                 r'\bmentioning?\s+[A-Z][a-z]+\b',
+                r'(감산|원유|배럴|산유국|항공사|연료비|금리)',  # Korean terms
             ],
             
             QueryType.STRUCTURED: [
@@ -106,9 +107,10 @@ class SmartGraphRAGRouter:
         
         # Known entities for quick recognition
         self.known_entities = {
-            'opec', 'tesla', 'apple', 'microsoft', 'google', 'amazon', 
+            'opec', '오펙', 'tesla', 'apple', 'microsoft', 'google', 'amazon', 
             'fed', 'federal reserve', '연준', '중앙은행', 'nvidia',
-            'meta', 'facebook', 'bitcoin', 'ethereum'
+            'meta', 'facebook', 'bitcoin', 'ethereum', '현대자동차',
+            '감산', '원유', '배럴', '산유국', '항공사', '연료비', '금리', '반도체'
         }
         
         # Investment domain terms
@@ -295,6 +297,23 @@ class SmartGraphRAGRouter:
                 
                 # Update performance stats
                 self._update_performance_stats("cypher", cypher_time)
+                
+                # Fallback: If Cypher returns no results and we haven't used vector search, try it
+                if (not cypher_result.get("results") and not strategy["use_vector"]):
+                    logger.info("🔄 Cypher returned no results, falling back to vector search")
+                    vector_start = time.time()
+                    vector_results = self.vector_retriever.search(
+                        query, k=max_results, include_graph_expansion=True
+                    )
+                    vector_time = time.time() - vector_start
+                    
+                    results["vector_results"] = vector_results
+                    results["vector_time"] = vector_time
+                    results["fallback_used"] = True
+                    strategy["reasoning"].append("Cypher fallback → Vector search")
+                    
+                    # Update performance stats
+                    self._update_performance_stats("vector", vector_time)
             
             # Combine results intelligently
             results["combined_results"] = self._combine_results(
