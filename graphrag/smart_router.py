@@ -61,14 +61,33 @@ class SmartGraphRAGRouter:
         self._initialize_retrievers()
     
     def _initialize_retrievers(self):
-        """Initialize retrievers lazily"""
+        """Initialize retrievers with graceful fallbacks"""
+        # Initialize vector retriever
         try:
             self.vector_retriever = GraphVectorRetriever()
-            self.cypher_retriever = TextToCypherRetriever()
-            logger.info("✅ Smart router initialized both retrievers")
+            logger.info("✅ Vector retriever initialized")
         except Exception as e:
-            logger.error(f"❌ Router initialization failed: {e}")
-            raise
+            logger.warning(f"⚠️ Vector retriever failed to initialize: {e}")
+            self.vector_retriever = None
+        
+        # Initialize cypher retriever
+        try:
+            self.cypher_retriever = TextToCypherRetriever()
+            logger.info("✅ Cypher retriever initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ Cypher retriever failed to initialize: {e}")
+            self.cypher_retriever = None
+        
+        # Check if at least one retriever works
+        if self.vector_retriever is None and self.cypher_retriever is None:
+            logger.error("❌ Both retrievers failed to initialize")
+            raise Exception("No retrievers available - both vector and cypher initialization failed")
+        elif self.vector_retriever is None:
+            logger.info("✅ Smart router initialized with Cypher retriever only")
+        elif self.cypher_retriever is None:
+            logger.info("✅ Smart router initialized with Vector retriever only")
+        else:
+            logger.info("✅ Smart router initialized with both retrievers")
     
     def _setup_query_patterns(self):
         """Setup patterns for query classification"""
@@ -272,8 +291,8 @@ class SmartGraphRAGRouter:
         }
         
         try:
-            # Execute vector search if needed
-            if strategy["use_vector"]:
+            # Execute vector search if needed and available
+            if strategy["use_vector"] and self.vector_retriever is not None:
                 vector_start = time.time()
                 vector_results = self.vector_retriever.search(
                     query, k=max_results, include_graph_expansion=True
@@ -286,8 +305,8 @@ class SmartGraphRAGRouter:
                 # Update performance stats
                 self._update_performance_stats("vector", vector_time)
             
-            # Execute cypher search if needed
-            if strategy["use_cypher"]:
+            # Execute cypher search if needed and available
+            if strategy["use_cypher"] and self.cypher_retriever is not None:
                 cypher_start = time.time()
                 cypher_result = self.cypher_retriever.search(query)
                 cypher_time = time.time() - cypher_start
@@ -298,8 +317,8 @@ class SmartGraphRAGRouter:
                 # Update performance stats
                 self._update_performance_stats("cypher", cypher_time)
                 
-                # Fallback: If Cypher returns no results and we haven't used vector search, try it
-                if (not cypher_result.get("results") and not strategy["use_vector"]):
+                # Fallback: If Cypher returns no results and vector is available, try it
+                if (not cypher_result.get("results") and not strategy["use_vector"] and self.vector_retriever is not None):
                     logger.info("🔄 Cypher returned no results, falling back to vector search")
                     vector_start = time.time()
                     vector_results = self.vector_retriever.search(
@@ -314,6 +333,37 @@ class SmartGraphRAGRouter:
                     
                     # Update performance stats
                     self._update_performance_stats("vector", vector_time)
+            
+            # Fallback: If intended retriever is not available, try the other one
+            elif strategy["use_vector"] and self.vector_retriever is None and self.cypher_retriever is not None:
+                logger.info("🔄 Vector retriever unavailable, falling back to cypher search")
+                cypher_start = time.time()
+                cypher_result = self.cypher_retriever.search(query)
+                cypher_time = time.time() - cypher_start
+                
+                results["cypher_results"] = cypher_result
+                results["cypher_time"] = cypher_time
+                results["fallback_used"] = True
+                strategy["reasoning"].append("Vector unavailable → Cypher search")
+                
+                # Update performance stats
+                self._update_performance_stats("cypher", cypher_time)
+            
+            elif strategy["use_cypher"] and self.cypher_retriever is None and self.vector_retriever is not None:
+                logger.info("🔄 Cypher retriever unavailable, falling back to vector search")
+                vector_start = time.time()
+                vector_results = self.vector_retriever.search(
+                    query, k=max_results, include_graph_expansion=True
+                )
+                vector_time = time.time() - vector_start
+                
+                results["vector_results"] = vector_results
+                results["vector_time"] = vector_time
+                results["fallback_used"] = True
+                strategy["reasoning"].append("Cypher unavailable → Vector search")
+                
+                # Update performance stats
+                self._update_performance_stats("vector", vector_time)
             
             # Combine results intelligently
             results["combined_results"] = self._combine_results(
