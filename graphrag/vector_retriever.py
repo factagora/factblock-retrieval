@@ -22,23 +22,24 @@ logger = logging.getLogger(__name__)
 class GraphVectorRetriever:
     """Graph-Enhanced Vector Retriever for FactBlocks"""
     
-    def __init__(self, neo4j_uri: str = "bolt://localhost:7687", 
-                 neo4j_username: str = "neo4j", 
-                 neo4j_password: str = "password",
-                 neo4j_database: str = "neo4j"):
+    def __init__(self, neo4j_uri: str = None, 
+                 neo4j_username: str = None, 
+                 neo4j_password: str = None,
+                 neo4j_database: str = None):
         """
         Initialize retriever with Neo4j connection and embeddings
         
         Args:
-            neo4j_uri: Neo4j connection URI
-            neo4j_username: Neo4j username
-            neo4j_password: Neo4j password
-            neo4j_database: Neo4j database name
+            neo4j_uri: Neo4j connection URI (defaults to env NEO4J_URI or localhost)
+            neo4j_username: Neo4j username (defaults to env NEO4J_USER or neo4j)
+            neo4j_password: Neo4j password (defaults to env NEO4J_PASSWORD or password)
+            neo4j_database: Neo4j database name (defaults to neo4j)
         """
-        self.neo4j_uri = neo4j_uri
-        self.neo4j_username = neo4j_username
-        self.neo4j_password = neo4j_password
-        self.neo4j_database = neo4j_database
+        # Use environment variables if parameters not provided
+        self.neo4j_uri = neo4j_uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        self.neo4j_username = neo4j_username or os.getenv("NEO4J_USER", "neo4j")
+        self.neo4j_password = neo4j_password or os.getenv("NEO4J_PASSWORD", "password")
+        self.neo4j_database = neo4j_database or os.getenv("NEO4J_DATABASE", "neo4j")
         self.driver: Optional[Driver] = None
         
         # Initialize embeddings
