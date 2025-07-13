@@ -956,6 +956,55 @@ async def reinitialize_openai():
         "message": "OpenAI client reinitialized" if openai_client else "OpenAI client initialization failed"
     }
 
+@app.post("/test-graphrag-init")
+async def test_graphrag_initialization():
+    """Test GraphRAG component initialization with detailed error reporting"""
+    global graphrag_router
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "tests": {}
+    }
+    
+    # Test 1: Direct Neo4j connection
+    try:
+        from neo4j import GraphDatabase
+        driver = GraphDatabase.driver("bolt://neo4j:7687", auth=("neo4j", "password"))
+        with driver.session(database="neo4j") as session:
+            result = session.run("MATCH (f:FactBlock) RETURN count(f) as count")
+            count = result.single()["count"]
+            results["tests"]["neo4j_connection"] = {"success": True, "factblock_count": count}
+        driver.close()
+    except Exception as e:
+        results["tests"]["neo4j_connection"] = {"success": False, "error": str(e)}
+    
+    # Test 2: GraphRAG imports
+    try:
+        from graphrag.smart_router import SmartGraphRAGRouter
+        results["tests"]["graphrag_imports"] = {"success": True}
+    except Exception as e:
+        results["tests"]["graphrag_imports"] = {"success": False, "error": str(e)}
+    
+    # Test 3: Router creation
+    try:
+        from graphrag.smart_router import SmartGraphRAGRouter, PerformanceMode
+        test_router = SmartGraphRAGRouter(performance_mode=PerformanceMode.BALANCED)
+        test_router.close()
+        results["tests"]["router_creation"] = {"success": True}
+    except Exception as e:
+        results["tests"]["router_creation"] = {"success": False, "error": str(e)}
+    
+    # Test 4: Force reinitialize global router
+    try:
+        initialize_retrieval_system()
+        results["tests"]["global_reinit"] = {
+            "success": True, 
+            "graphrag_router_available": graphrag_router is not None
+        }
+    except Exception as e:
+        results["tests"]["global_reinit"] = {"success": False, "error": str(e)}
+    
+    return results
+
 class ExampleText(BaseModel):
     id: str = Field(..., description="Unique identifier for the example")
     title: str = Field(..., description="Brief title describing the example")
