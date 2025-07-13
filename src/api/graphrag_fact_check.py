@@ -984,16 +984,50 @@ async def test_graphrag_initialization():
     except Exception as e:
         results["tests"]["graphrag_imports"] = {"success": False, "error": str(e)}
     
-    # Test 3: Router creation
+    # Test 3: Individual retriever testing
+    # Test Vector Retriever
+    try:
+        from graphrag.vector_retriever import GraphVectorRetriever
+        vector_retriever = GraphVectorRetriever()
+        vector_retriever.close()
+        results["tests"]["vector_retriever"] = {"success": True}
+    except Exception as e:
+        import traceback
+        results["tests"]["vector_retriever"] = {
+            "success": False, 
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+    
+    # Test Cypher Retriever  
+    try:
+        from graphrag.cypher_retriever import TextToCypherRetriever
+        cypher_retriever = TextToCypherRetriever()
+        cypher_retriever.close()
+        results["tests"]["cypher_retriever"] = {"success": True}
+    except Exception as e:
+        import traceback
+        results["tests"]["cypher_retriever"] = {
+            "success": False,
+            "error": str(e), 
+            "traceback": traceback.format_exc()
+        }
+    
+    # Test 4: Router creation
     try:
         from graphrag.smart_router import SmartGraphRAGRouter, PerformanceMode
         test_router = SmartGraphRAGRouter(performance_mode=PerformanceMode.BALANCED)
         test_router.close()
         results["tests"]["router_creation"] = {"success": True}
     except Exception as e:
-        results["tests"]["router_creation"] = {"success": False, "error": str(e)}
+        import traceback
+        results["tests"]["router_creation"] = {
+            "success": False, 
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
     
-    # Test 4: Force reinitialize global router
+    # Test 5: Force reinitialize global router
     try:
         initialize_retrieval_system()
         results["tests"]["global_reinit"] = {
